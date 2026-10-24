@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { getPeriodRange, shiftPeriod, summarizeTransactions } from "../src/lib/finance.ts";
+import { calculateUnallocatedIncome, getPeriodRange, percentageOfIncome, shiftPeriod, summarizeTransactions } from "../src/lib/finance.ts";
 
 describe("Asia/Manila calendar date ranges", () => {
   it("returns one day for daily periods", () => assert.deepEqual(getPeriodRange("2026-02-28", "Daily"), { start: "2026-02-28", end: "2026-02-28" }));
@@ -25,4 +25,18 @@ describe("financial summary", () => {
     assert.deepEqual(summary, { income: 100_000, expenses: 20_000, savingsContributions: 15_000, remainingBalance: 65_000 });
   });
   it("returns zero totals for an empty range", () => assert.deepEqual(summarizeTransactions([], { start: "2026-01-01", end: "2026-01-31" }), { income: 0, expenses: 0, savingsContributions: 0, remainingBalance: 0 }));
+});
+
+describe("weekly allocation chart math", () => {
+  it("calculates each slice as a percentage of total income", () => {
+    assert.equal(percentageOfIncome(25_000, 100_000), 25);
+    assert.equal(percentageOfIncome(15_000, 100_000), 15);
+  });
+  it("does not divide by zero when income is zero", () => {
+    assert.equal(percentageOfIncome(5_000, 0), 0);
+  });
+  it("reports unallocated income or allocations above income explicitly", () => {
+    assert.equal(calculateUnallocatedIncome(100_000, [20_000, 30_000, 10_000]), 40_000);
+    assert.equal(calculateUnallocatedIncome(50_000, [20_000, 25_000, 10_000]), -5_000);
+  });
 });
