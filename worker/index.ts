@@ -209,7 +209,7 @@ export default {
         const group = body?.budgetGroup;
         if (!name || name.length > 60) return fail("Enter a category name of 1–60 characters.");
         if (kind !== "income" && kind !== "expense") return fail("Choose income or expense for the category.");
-        if (!["needs","wants","savings","income"].includes(group) || (kind === "income" && group !== "income") || (kind === "expense" && group === "income")) return fail("Choose a category group matching its type.");
+        if (typeof group !== "string" || !["needs","wants","savings","income"].includes(group) || (kind === "income" && group !== "income") || (kind === "expense" && group === "income")) return fail("Choose a category group matching its type.");
         const categoryId = id();
         try {
           await db.prepare("INSERT INTO categories (id,user_id,name,kind,budget_group) VALUES (?,?,?,?,?)").bind(categoryId,userId,name,kind,group).run();
