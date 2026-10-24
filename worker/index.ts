@@ -47,6 +47,9 @@ function validDate(value: unknown): value is string {
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
+function validPaymentMethod(value: unknown): value is "cash" | "bank_transfer" | "e_wallet" | "credit_card" | "other" {
+  return value === "cash" || value === "bank_transfer" || value === "e_wallet" || value === "credit_card" || value === "other";
+}
 function amountCentavos(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0.01 || value > 1000000000) return null;
   const cents = Math.round(value * 100);
@@ -244,7 +247,7 @@ export default {
         if (date > todayInManila()) return fail("Transaction date cannot be in the future (Asia/Manila).");
         if (!description || description.length > 180) return fail("Description is required and must be 180 characters or fewer.");
         if (notes.length > 1000) return fail("Notes must be 1,000 characters or fewer.");
-        if (!["cash", "bank_transfer", "e_wallet", "credit_card", "other"].includes(String(paymentMethod))) return fail("Choose a valid payment method.");
+        if (!validPaymentMethod(paymentMethod)) return fail("Choose a valid payment method.");
         const ownedAccount = await db.prepare("SELECT id FROM accounts WHERE id=? AND user_id=?").bind(accountId,userId).first();
         if (!ownedAccount) return fail("Choose one of your own accounts.", 403);
         const categoryKind = kind === "savings_contribution" ? "expense" : kind;
