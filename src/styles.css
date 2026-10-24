@@ -41,3 +41,58 @@ textarea{font:inherit;color:var(--ink)}
 @media(max-width:620px){.period-panel{padding:15px}.period-toolbar{gap:10px}.period-date-controls{display:grid;grid-template-columns:1fr 1fr;width:100%}.period-date-controls label{min-width:0}.period-date-controls input{min-width:0;width:100%}.period-date-controls .btn{min-width:0;padding:9px 7px}.transaction-summary-grid{gap:9px}.transaction-filter-toolbar select{flex-basis:100%;width:100%}.transaction-detail-grid{grid-template-columns:1fr 1fr}.transaction-detail-modal{padding:16px}.modal-actions{flex-direction:column-reverse}.modal-actions .btn{width:100%}}
 
 .bar-savings{background:#9585c9}
+
+/* Budget categories, goal tracking, and interactive financial charts */
+.budget-workspace{display:grid;gap:16px}
+.budget-actions{display:flex;gap:8px;margin-top:10px}
+.budget-alert{display:flex;align-items:center;gap:7px;margin-top:10px;padding:9px 10px;border-radius:8px;background:#fff2e6;color:#a65324;font-size:10px;font-weight:700}
+.category-manage-list{display:grid;gap:7px;margin-top:16px}
+.category-manage-row{display:flex;align-items:center;gap:9px;border:1px solid #edf1ec;border-radius:9px;padding:9px 10px;min-width:0}
+.category-manage-label{display:grid;gap:3px;flex:1;min-width:0}
+.category-manage-label b{font-size:11px;color:#405447;overflow-wrap:anywhere}
+.category-manage-label small{font-size:9px;color:#849087;text-transform:capitalize}
+.goal-description{font-size:11px;line-height:1.55;color:#7b897f;margin:7px 0}
+.goal-metrics{display:flex;justify-content:space-between;gap:8px;margin-top:7px;color:#849087;font-size:10px}
+.goal-metrics b{color:#506757}
+.goal-progress{margin-top:10px}
+.weekly-chart-panel{padding:22px;min-width:0}
+.weekly-chart-panel .section-head{align-items:flex-start}
+.weekly-chart-layout{display:grid;grid-template-columns:minmax(170px,.8fr) minmax(250px,1.2fr);gap:18px;align-items:center;margin-top:12px}
+.allocation-pie-wrap{display:grid;justify-items:center;gap:8px;min-width:0}
+.allocation-pie{width:min(100%,250px);aspect-ratio:1;border:0;border-radius:50%;display:grid;place-items:center;padding:16px;cursor:pointer;transition:transform .18s ease;box-shadow:inset 0 0 0 1px #ffffff80}
+.allocation-pie:hover{transform:scale(1.025)}
+.allocation-pie>span{width:63%;aspect-ratio:1;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px;text-align:center;box-shadow:0 2px 12px #263e2910}
+.allocation-pie>span small{font-size:9px;color:#839087;line-height:1.3}
+.allocation-pie>span b{font-size:clamp(12px,1.8vw,17px);color:#405447;overflow-wrap:anywhere}
+.chart-interaction-hint{font-size:9px;color:#8b968e;text-align:center}
+.allocation-legend{display:grid;gap:7px}
+.allocation-legend-item{display:flex;align-items:center;gap:10px;text-align:left;width:100%;border:1px solid #edf1ec;background:#fff;border-radius:9px;padding:11px;cursor:pointer;min-width:0}
+.allocation-legend-item.active{border-color:#9bbba4;background:#f6faf6;box-shadow:0 0 0 2px #e5f0e6}
+.allocation-legend-dot{width:11px;height:11px;flex:0 0 11px;border-radius:4px}
+.allocation-legend-copy{display:grid;gap:4px;flex:1;min-width:0}
+.allocation-legend-copy b{font-size:11px;color:#425649}
+.allocation-legend-copy small{font-size:10px;color:#7e8b81;overflow-wrap:anywhere}
+.allocation-legend-item>strong{font-size:12px;color:#435b4a;white-space:nowrap}
+.allocation-summary{grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f6f8f4;border:1px solid #edf1ec;border-radius:10px;padding:12px 14px}
+.allocation-summary span,.allocation-summary small{font-size:10px;color:#879288}
+.allocation-summary b{font-size:11px;color:#43574a}
+.allocation-summary strong{font-size:15px;color:#344d3c;margin-left:auto}
+.unallocated-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;padding:13px 15px;border-radius:10px;background:#f4f7f2;border:1px solid #e7eee5}
+.unallocated-summary.negative{background:#fff6ee;border-color:#f4e1d2}
+.unallocated-summary>div{display:grid;gap:4px}
+.unallocated-summary b{font-size:11px;color:#506656}
+.unallocated-summary small{font-size:10px;color:#849087;line-height:1.5}
+.unallocated-summary strong{font-size:13px;color:#425c4a;white-space:nowrap}
+.unallocated-summary.negative strong,.unallocated-summary.negative b{color:#a65324}
+.interactive-breakdown{display:block;width:100%;border:0;background:transparent;text-align:left;padding:6px 0;cursor:pointer}
+.interactive-breakdown:hover .breakdown-label span:nth-child(2){text-decoration:underline}
+.interactive-breakdown>small{display:block;font-size:9px;color:#879188;margin-top:5px}
+.savings-progress-chart{display:grid;gap:15px}
+.savings-progress-row{display:grid;gap:7px;width:100%;border:0;background:transparent;padding:0;text-align:left;cursor:pointer}
+.savings-progress-row>div:first-child{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#506656}
+.savings-progress-row>div:first-child span{overflow-wrap:anywhere}
+.savings-progress-row>div:first-child b{white-space:nowrap}
+.savings-progress-row>small{font-size:9px;color:#89958c}
+.savings-progress-row:hover>div:first-child span{text-decoration:underline}
+@media(max-width:900px){.weekly-chart-layout{grid-template-columns:1fr 1fr}.allocation-summary{grid-column:1/-1}.weekly-chart-panel .section-head{display:grid;gap:12px}}
+@media(max-width:600px){.weekly-chart-panel{padding:15px}.weekly-chart-layout{grid-template-columns:1fr;gap:13px}.allocation-pie{width:min(72vw,230px)}.allocation-summary{gap:7px}.allocation-summary strong{margin-left:0}.unallocated-summary{align-items:flex-start;flex-direction:column}.budget-actions{flex-wrap:wrap}.goal-metrics{align-items:flex-start}}
