@@ -372,7 +372,7 @@ export default function App() {
           {success && <div className="alert alert-success global-alert" role="status"><Check size={17} /><span>{success}</span><button onClick={() => setSuccess("")} aria-label="Dismiss success"><X size={16} /></button></div>}
 
           {loading ? <div className="loading-panel"><LoaderCircle className="spin" size={24} /><span>Loading your private financial records…</span></div> : <>
-            {page === "Dashboard" && <DashboardPage dashboard={dashboard} accounts={accounts} goals={goals} transactions={transactions} setPage={setPage} />}
+            {page === "Dashboard" && <DashboardPage accounts={accounts} goals={goals} transactions={transactions} setPage={setPage} />}
             {page === "Transactions" && <div className="transaction-workspace">
               <section className="panel period-panel">
                 <div className="section-head"><div><span className="overline">PERIOD SUMMARY</span><h2>Your money movement</h2><p>All dates are calendar dates in Asia/Manila.</p></div></div>
@@ -469,7 +469,7 @@ function TransactionTable({ transactions, search, setSearch, filter, setFilter, 
     <div className="table-foot"><span>Showing {transactions.length} matching saved record{transactions.length === 1 ? "" : "s"}</span></div>
   </>;
 }
-function DashboardPage({ dashboard, accounts, goals, transactions, setPage }: { dashboard: Dashboard | null; accounts: Account[]; goals: Goal[]; transactions: Transaction[]; setPage: (page: Page) => void }) {
+function DashboardPage({ accounts, goals, transactions, setPage }: { accounts: Account[]; goals: Goal[]; transactions: Transaction[]; setPage: (page: Page) => void }) {
   const monthRange = getPeriodRange(manilaToday(), "Monthly");
   const totals = summarizeTransactions(transactions, monthRange);
   const activeGoals = goals.filter((g) => g.status !== "paused");
