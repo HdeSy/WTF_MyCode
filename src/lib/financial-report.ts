@@ -201,9 +201,9 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
     const overlapDays = Math.max(0, dayNumber(overlapEnd) - dayNumber(overlapStart) + 1);
     const limitCents = Math.round(budget.amount_centavos * overlapDays / totalDays);
     const actualCents = cents(transactions.filter((tx) => tx.transaction_type === "expense" && tx.category_id === budget.category_id && tx.transaction_date >= overlapStart && tx.transaction_date <= overlapEnd).map((tx) => tx.amount_centavos));
-    return { budget, category, limitCents, actualCents };
+    return { budget, category, limitCents, actualCents, overlapStart, overlapEnd };
   });
-  budgetResults.forEach(({ budget, category, limitCents, actualCents }, index) => {
+  budgetResults.forEach(({ budget, category, limitCents, actualCents, overlapStart, overlapEnd }, index) => {
     const row = index + 6;
     budgetSheet.addRow({
       category: category?.name ?? budget.category_name,
