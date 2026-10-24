@@ -96,3 +96,15 @@ textarea{font:inherit;color:var(--ink)}
 .savings-progress-row:hover>div:first-child span{text-decoration:underline}
 @media(max-width:900px){.weekly-chart-layout{grid-template-columns:1fr 1fr}.allocation-summary{grid-column:1/-1}.weekly-chart-panel .section-head{display:grid;gap:12px}}
 @media(max-width:600px){.weekly-chart-panel{padding:15px}.weekly-chart-layout{grid-template-columns:1fr;gap:13px}.allocation-pie{width:min(72vw,230px)}.allocation-summary{gap:7px}.allocation-summary strong{margin-left:0}.unallocated-summary{align-items:flex-start;flex-direction:column}.budget-actions{flex-wrap:wrap}.goal-metrics{align-items:flex-start}}
+
+/* Financial reports period picker and export feedback */
+.report-period-buttons{grid-template-columns:repeat(4,minmax(0,1fr));min-width:310px}
+.report-period-buttons button{white-space:nowrap;padding-inline:8px}
+.report-date-controls{justify-content:flex-start}
+.report-date-controls label{min-width:140px}
+.report-date-controls input{min-height:36px}
+.report-period-select{flex-wrap:wrap}
+.report-period-select>div:first-child{flex:1 1 220px}
+.report-range{flex:1 0 100%;font-weight:700;color:#63786a}
+@media(max-width:900px){.report-period-buttons{min-width:0;width:100%}.report-period-select{align-items:flex-start}.report-date-controls{width:100%}}
+@media(max-width:620px){.report-period-buttons{grid-template-columns:repeat(2,minmax(0,1fr))}.report-date-controls{display:grid;grid-template-columns:1fr 1fr}.report-date-controls label{min-width:0}.report-date-controls input{width:100%;min-width:0}.report-date-controls .btn{padding:9px 7px}.report-range{line-height:1.5}}
