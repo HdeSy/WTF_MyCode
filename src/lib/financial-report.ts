@@ -244,7 +244,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
       target,
       saved,
       remaining: formulaCell(`MAX(0,B${row}-C${row})`, Math.max(0, target - saved)),
-      date: goal.target_date || "",
+      date: goal.target_date ? new Date(goal.target_date + "T00:00:00.000Z") : "",
       progress: formulaCell(`IF(B${row}=0,0,C${row}/B${row})`, target > 0 ? saved / target : 0),
     });
   });
