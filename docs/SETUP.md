@@ -1,6 +1,6 @@
 # Budgetwise setup
 
-This branch contains the initial UI and Cloudflare Worker scaffold. The app is **not production-ready**: the dashboard uses sample data and must not be treated as a real financial record system.
+This branch contains the Budgetwise application UI, Better Auth integration, and user-scoped Cloudflare D1 API. It is **not production-ready yet**: configure Cloudflare, apply the reviewed migrations to a test database, and complete the build and security checks before storing real financial records.
 
 ## Stack
 
