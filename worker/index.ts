@@ -370,7 +370,7 @@ export default {
       }
 
       if (url.pathname === "/api/savings-goals" && request.method === "GET") {
-        const rows = await db.prepare("SELECT id,name,target_amount_centavos,target_date,current_amount_centavos,status FROM savings_goals WHERE user_id=? ORDER BY created_at DESC").bind(userId).all();
+        const rows = await db.prepare("SELECT g.id,g.name,g.description,g.target_amount_centavos,g.target_date,(g.current_amount_centavos+COALESCE(SUM(t.amount_centavos),0)) AS current_amount_centavos,g.status FROM savings_goals g LEFT JOIN transactions t ON t.goal_id=g.id AND t.user_id=g.user_id AND t.transaction_type='savings_contribution' WHERE g.user_id=? GROUP BY g.id ORDER BY g.created_at DESC").bind(userId).all();
         return json({ data: rows.results ?? [] });
       }
 
@@ -379,13 +379,15 @@ export default {
         const name = typeof body?.name === "string" ? body.name.trim() : "";
         const target = amountCentavos(body?.targetAmount);
         const rawTargetDate = body?.targetDate;
+        const description = typeof body?.description === "string" ? body.description.trim() : "";
+        if (description.length > 500) return fail("Goal description must be 500 characters or fewer.");
         if (!name || name.length > 80) return fail("Enter a savings goal name of 1–80 characters.");
         if (target === null) return fail("Target amount must be greater than ₱0.00.");
         if (rawTargetDate !== undefined && rawTargetDate !== null && rawTargetDate !== "" && !validDate(rawTargetDate)) return fail("Choose a valid target date.");
         const targetDate = typeof rawTargetDate === "string" && rawTargetDate ? rawTargetDate : null;
         const goalId = id();
-        await db.prepare("INSERT INTO savings_goals (id,user_id,name,target_amount_centavos,target_date) VALUES (?,?,?,?,?)").bind(goalId,userId,name,target,targetDate).run();
-        return json({ data: { id: goalId, name, target_amount_centavos: target, target_date: targetDate, current_amount_centavos: 0, status: "active" } }, 201);
+        await db.prepare("INSERT INTO savings_goals (id,user_id,name,description,target_amount_centavos,target_date) VALUES (?,?,?,?,?,?)").bind(goalId,userId,name,description || null,target,targetDate).run();
+        return json({ data: { id: goalId, name, description: description || null, target_amount_centavos: target, target_date: targetDate, current_amount_centavos: 0, status: "active" } }, 201);
       }
 
       const goalMatch = url.pathname.match(/^\/api\/savings-goals\/([a-f0-9-]+)$/i);
