@@ -108,3 +108,9 @@ textarea{font:inherit;color:var(--ink)}
 .report-range{flex:1 0 100%;font-weight:700;color:#63786a}
 @media(max-width:900px){.report-period-buttons{min-width:0;width:100%}.report-period-select{align-items:flex-start}.report-date-controls{width:100%}}
 @media(max-width:620px){.report-period-buttons{grid-template-columns:repeat(2,minmax(0,1fr))}.report-date-controls{display:grid;grid-template-columns:1fr 1fr}.report-date-controls label{min-width:0}.report-date-controls input{width:100%;min-width:0}.report-date-controls .btn{padding:9px 7px}.report-range{line-height:1.5}}
+
+/* Production fatal-error fallback */
+.fatal-error{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--page-bg,#f7f9f6);color:var(--text,#20332a)}
+.fatal-error-card{width:min(100%,480px);padding:32px;border:1px solid var(--border,#dce5de);border-radius:20px;background:var(--surface,#fff);box-shadow:0 18px 50px rgba(25,45,32,.08)}
+.fatal-error-card h1{margin:8px 0 12px;font-size:clamp(1.6rem,4vw,2.1rem)}
+.fatal-error-card p:not(.overline){line-height:1.6;color:var(--muted,#65756a);margin-bottom:22px}
