@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "budgetwise-personal-tracker",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-10-24",
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "budgetwise-db",
+      "database_id": "9db9307b-d0e0-4859-978a-4f39828114a8",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false,
+      "head_sampling_rate": 1
+    }
+  },
+  "keep_vars": true
+}
