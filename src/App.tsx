@@ -181,7 +181,7 @@ export default function App() {
 
   const startEditTransaction = (tx: Transaction) => {
     setEditingTransactionId(tx.id);
-    setTransactionForm({ type: tx.transaction_type === "transfer" ? "expense" : tx.transaction_type, goalId: tx.goal_id || "", amount: (tx.amount_centavos / 100).toFixed(2), date: tx.transaction_date, accountId: tx.account_id, categoryId: tx.category_id || "", description: tx.description || "", paymentMethod: tx.payment_method || "cash", notes: tx.notes || "", goalId: tx.goal_id || "" });
+    setTransactionForm({ type: tx.transaction_type === "transfer" ? "expense" : tx.transaction_type, amount: (tx.amount_centavos / 100).toFixed(2), date: tx.transaction_date, accountId: tx.account_id, categoryId: tx.category_id || "", description: tx.description || "", paymentMethod: tx.payment_method || "cash", notes: tx.notes || "", goalId: tx.goal_id || "" });
     document.getElementById("transaction-entry")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
