@@ -27,7 +27,7 @@ export type FinancialReportInput = {
 const pesosFormat = '"₱"#,##0.00;[Red]-"₱"#,##0.00';
 const percentFormat = "0.0%";
 const dateFormat = "yyyy-mm-dd";
-const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + "T00:00:00Z"));
+const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
 const dayNumber = (value: string) => Date.parse(value + "T00:00:00Z") / 86_400_000;
 const intersects = (aStart: string, aEnd: string, bStart: string, bEnd: string) => aStart <= bEnd && aEnd >= bStart;
 
