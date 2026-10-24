@@ -231,6 +231,7 @@ export default {
         if (!["income", "expense"].includes(String(kind))) return fail("Choose income or expense.");
         if (cents === null) return fail("Enter an amount greater than ₱0.00 and no more than ₱1,000,000,000.00.");
         if (!validDate(date)) return fail("Choose a valid transaction date.");
+        if (date > todayInManila()) return fail("Transaction date cannot be in the future (Asia/Manila).");
         if (description.length > 180) return fail("Description must be 180 characters or fewer.");
         const ownedAccount = await db.prepare("SELECT id FROM accounts WHERE id=? AND user_id=?").bind(accountId,userId).first();
         if (!ownedAccount) return fail("Choose one of your own accounts.", 403);
