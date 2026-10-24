@@ -56,7 +56,7 @@ export function percentageOfIncome(amountCentavos: number, incomeCentavos: numbe
 }
 
 /** A negative result means the three allocations exceed income. Keep it visible instead of hiding it in a slice. */
-export function unallocatedIncome(incomeCentavos: number, allocationsCentavos: number[]): number {
+export function calculateUnallocatedIncome(incomeCentavos: number, allocationsCentavos: number[]): number {
   const allocated = allocationsCentavos.reduce((sum, amount) => sum + (Number.isFinite(amount) ? amount : 0), 0);
   return incomeCentavos - allocated;
 }
