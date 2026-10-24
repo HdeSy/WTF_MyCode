@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc -b --pretty",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test tests/finance.test.ts tests/migrations.test.ts",
     "validate:deploy": "node scripts/validate-deploy-config.mjs",
     "predeploy": "npm run validate:deploy"
   },
