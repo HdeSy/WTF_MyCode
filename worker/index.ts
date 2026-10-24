@@ -188,6 +188,16 @@ export default {
       }
 
       if (url.pathname === "/api/categories" && request.method === "GET") {
+        const categoryCount = await db.prepare("SELECT COUNT(*) AS count FROM categories WHERE user_id=?").bind(userId).first<{count:number}>();
+        if (Number(categoryCount?.count ?? 0) === 0) {
+          const defaults: Array<[string,"income"|"expense","needs"|"wants"|"savings"|"income"]> = [
+            ["Salary","income","income"],["Other income","income","income"],
+            ["Food","expense","needs"],["Transportation","expense","needs"],["Bills","expense","needs"],["Groceries","expense","needs"],["Other necessities","expense","needs"],
+            ["Entertainment","expense","wants"],["Shopping","expense","wants"],["Dining out","expense","wants"],["Discretionary spending","expense","wants"],
+            ["Emergency fund","expense","savings"],["Personal savings","expense","savings"],["Other financial goals","expense","savings"]
+          ];
+          await db.batch(defaults.map(([name,kind,group]) => db.prepare("INSERT INTO categories (id,user_id,name,kind,budget_group) VALUES (?,?,?,?,?)").bind(id(),userId,name,kind,group)));
+        }
         const rows = await db.prepare("SELECT id,name,kind,color,budget_group FROM categories WHERE user_id=? ORDER BY budget_group,kind,name").bind(userId).all();
         return json({ data: rows.results ?? [] });
       }
