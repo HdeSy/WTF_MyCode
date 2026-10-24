@@ -90,12 +90,12 @@ describe("Excel financial report workbook", () => {
     assert.equal((summary.getCell("B10").value as { result: number }).result, 200);
     assert.equal((summary.getCell("B11").value as { result: number }).result, 50);
     assert.match((summary.getCell("B9").value as { formula: string }).formula, /B6-B7-B8/);
-    assert.match((summary.getCell("C19").value as { formula: string }).formula, /Transactions!\\$I:\\$I/);
+    assert.ok((summary.getCell("C19").value as { formula: string }).formula.includes("Transactions!$I:$I"));
     const budget = workbook.getWorksheet("Budget Analysis")!;
     assert.equal(budget.getCell("C6").value && (budget.getCell("C6").value as { result: number }).result, 200);
     assert.equal((budget.getCell("D6").value as { result: number }).result, 100);
     assert.equal((budget.getCell("F6").value as { result: string }).result, "Within Budget");
-    assert.match((budget.getCell("C6").value as { formula: string }).formula, /Transactions!\\$I:\\$I/);
+    assert.ok((budget.getCell("C6").value as { formula: string }).formula.includes("Transactions!$I:$I"));
     const goal = workbook.getWorksheet("Savings Goals")!;
     assert.equal((goal.getCell("D6").value as { result: number }).result, 250);
     assert.equal((goal.getCell("F6").value as { result: number }).result, 0.5);
