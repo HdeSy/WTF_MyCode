@@ -11,7 +11,7 @@
     {
       "binding": "DB",
       "database_name": "budgetwise-db",
-      "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
+      "database_id": "9db9307b-d0e0-4859-978a-4f39828114a8",
       "migrations_dir": "migrations"
     }
   ],
