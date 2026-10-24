@@ -14,10 +14,10 @@ import {
 type Page = "Dashboard" | "Transactions" | "Budgets" | "Savings Goals" | "Reports" | "Settings";
 type User = { id: string; name: string; email: string };
 type Account = { id: string; name: string; account_type: string; opening_balance_centavos: number; balance_centavos?: number };
-type Category = { id: string; name: string; kind: "income" | "expense"; color?: string | null };
-type Transaction = { id: string; account_id: string; category_id: string | null; transaction_type: "income" | "expense" | "savings_contribution" | "transfer"; amount_centavos: number; transaction_date: string; description: string; payment_method: "cash" | "bank_transfer" | "e_wallet" | "credit_card" | "other"; notes: string | null; account_name?: string; category_name?: string | null };
+type Category = { id: string; name: string; kind: "income" | "expense"; budget_group: "needs" | "wants" | "savings" | "income"; color?: string | null };
+type Transaction = { id: string; account_id: string; category_id: string | null; goal_id?: string | null; transaction_type: "income" | "expense" | "savings_contribution" | "transfer"; amount_centavos: number; transaction_date: string; description: string; payment_method: "cash" | "bank_transfer" | "e_wallet" | "credit_card" | "other"; notes: string | null; account_name?: string; category_name?: string | null };
 type Budget = { id: string; category_id: string; category_name: string; period_start: string; period_end: string; amount_centavos: number; spent_centavos: number };
-type Goal = { id: string; name: string; target_amount_centavos: number; target_date: string | null; current_amount_centavos: number; status: "active" | "completed" | "paused" };
+type Goal = { id: string; name: string; description?: string | null; target_amount_centavos: number; target_date: string | null; current_amount_centavos: number; status: "active" | "completed" | "paused" };
 type Dashboard = { period: { start: string; end: string; timezone: string }; totals: { income: number; expenses: number; savings: number; savingsContributions: number; remainingBalance: number; goalSavings: number }; recentTransactions: Transaction[] };
 type ApiResult<T> = { data: T; error?: string };
 
@@ -72,7 +72,7 @@ export default function App() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [search, setSearch] = useState("");
   const [transactionFilter, setTransactionFilter] = useState("all");
-  const [transactionForm, setTransactionForm] = useState({ type: "expense", amount: "", date: manilaToday(), accountId: "", categoryId: "", description: "", paymentMethod: "cash", notes: "" });
+  const [transactionForm, setTransactionForm] = useState({ type: "expense", amount: "", date: manilaToday(), accountId: "", categoryId: "", description: "", paymentMethod: "cash", notes: "", goalId: "" });
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [viewTransaction, setViewTransaction] = useState<Transaction | null>(null);
   const [transactionPeriod, setTransactionPeriod] = useState<PeriodKind>("Monthly");
@@ -82,10 +82,14 @@ export default function App() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterPaymentMethod, setFilterPaymentMethod] = useState("all");
   const [budgetForm, setBudgetForm] = useState({ categoryId: "", amount: "", periodStart: manilaMonthStart(), periodEnd: manilaToday() });
-  const [goalForm, setGoalForm] = useState({ name: "", targetAmount: "", targetDate: "" });
+  const [goalForm, setGoalForm] = useState({ name: "", description: "", targetAmount: "", targetDate: "" });
   const [goalUpdates, setGoalUpdates] = useState<Record<string, string>>({});
   const [accountForm, setAccountForm] = useState({ name: "", accountType: "bank", openingBalance: "0" });
-  const [categoryForm, setCategoryForm] = useState({ name: "", kind: "expense" });
+  const [categoryForm, setCategoryForm] = useState({ name: "", kind: "expense", budgetGroup: "needs" });
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
+  const [budgetPeriodKind, setBudgetPeriodKind] = useState<"Daily" | "Weekly" | "Monthly">("Monthly");
+  const [budgetAnchor, setBudgetAnchor] = useState(manilaToday());
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -165,7 +169,7 @@ export default function App() {
     if (!transactionForm.paymentMethod) { setError("Choose a payment method."); return; }
     setSaving(true);
     try {
-      const payload = { type: transactionForm.type, amount, date: transactionForm.date, accountId: transactionForm.accountId, categoryId: transactionForm.categoryId, description: transactionForm.description.trim(), paymentMethod: transactionForm.paymentMethod, notes: transactionForm.notes.trim() };
+      const payload = { type: transactionForm.type, amount, date: transactionForm.date, accountId: transactionForm.accountId, categoryId: transactionForm.categoryId, description: transactionForm.description.trim(), paymentMethod: transactionForm.paymentMethod, notes: transactionForm.notes.trim(), goalId: transactionForm.type === "savings_contribution" ? transactionForm.goalId || null : null };
       const wasEditing = Boolean(editingTransactionId);
       await api(editingTransactionId ? "/api/transactions/" + editingTransactionId : "/api/transactions", { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
       setTransactionForm((old) => ({ ...old, amount: "", description: "", categoryId: "", notes: "" }));
@@ -177,7 +181,7 @@ export default function App() {
 
   const startEditTransaction = (tx: Transaction) => {
     setEditingTransactionId(tx.id);
-    setTransactionForm({ type: tx.transaction_type === "transfer" ? "expense" : tx.transaction_type, amount: (tx.amount_centavos / 100).toFixed(2), date: tx.transaction_date, accountId: tx.account_id, categoryId: tx.category_id || "", description: tx.description || "", paymentMethod: tx.payment_method || "cash", notes: tx.notes || "" });
+    setTransactionForm({ type: tx.transaction_type === "transfer" ? "expense" : tx.transaction_type, goalId: tx.goal_id || "", amount: (tx.amount_centavos / 100).toFixed(2), date: tx.transaction_date, accountId: tx.account_id, categoryId: tx.category_id || "", description: tx.description || "", paymentMethod: tx.payment_method || "cash", notes: tx.notes || "", goalId: tx.goal_id || "" });
     document.getElementById("transaction-entry")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -211,7 +215,7 @@ export default function App() {
     if (!goalForm.name.trim()) { setError("Enter a name for your savings goal."); return; }
     if (!Number.isFinite(targetAmount) || targetAmount <= 0) { setError("Enter a target amount greater than ₱0.00."); return; }
     setSaving(true);
-    try { await api("/api/savings-goals", { method: "POST", body: JSON.stringify({ name: goalForm.name.trim(), targetAmount, targetDate: goalForm.targetDate || null }) }); setGoalForm({ name: "", targetAmount: "", targetDate: "" }); await refreshAll(); flash("Savings goal created."); }
+    try { await api("/api/savings-goals", { method: "POST", body: JSON.stringify({ name: goalForm.name.trim(), targetAmount, targetDate: goalForm.targetDate || null }) }); setGoalForm({ name: "", description: "", targetAmount: "", targetDate: "" }); await refreshAll(); flash("Savings goal created."); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not create savings goal."); }
     finally { setSaving(false); }
   };
