@@ -138,7 +138,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
     const amountCents = cents(transactions.filter((tx) => tx.transaction_type !== "transfer" && (unallocatedRow ? (!tx.category_id || !categoryById.has(tx.category_id)) : tx.category_id === category.id)).map((tx) => tx.amount_centavos));
     summary.getCell(row, 1).value = category.name;
     summary.getCell(row, 2).value = unallocatedRow ? "Unallocated" : category.budget_group[0].toUpperCase() + category.budget_group.slice(1);
-    summary.getCell(row, 3).value = unallocatedRow ? formulaCell(`SUMIFS(Transactions!$F:$F,Transactions!$D:$D,A${row},Transactions!$H:$H,B${row},Transactions!$C:$C,"<>Transfer")`, amountCents / 100) : formulaCell(`SUMIFS(Transactions!$F:$F,Transactions!$D:$D,A${row},Transactions!$H:$H,B${row},Transactions!$C:$C,"<>Transfer")`, amountCents / 100);
+    summary.getCell(row, 3).value = unallocatedRow ? formulaCell("SUMIFS(Transactions!$F:$F,Transactions!$I:$I,\"Uncategorized\",Transactions!$C:$C,\"<>Transfer\")", amountCents / 100) : formulaCell("SUMIFS(Transactions!$F:$F,Transactions!$I:$I,\"" + category.id + "\",Transactions!$C:$C,\"<>Transfer\")", amountCents / 100);
     summary.getCell(row, 3).numFmt = pesosFormat;
     summary.getCell(row, 4).value = formulaCell(`IF($B$6=0,0,C${row}/$B$6)`, incomeCents > 0 ? amountCents / incomeCents : 0);
     summary.getCell(row, 4).numFmt = percentFormat;
@@ -161,6 +161,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
     { header: "Amount (PHP)", key: "amount", width: 19 },
     { header: "Notes", key: "notes", width: 36 },
     { header: "Category Group", key: "group", width: 18 },
+    { header: "Category ID (internal)", key: "categoryId", width: 36 },
   ];
   txSheet.addRows(transactions.map((tx) => ({
     date: new Date(tx.transaction_date + "T00:00:00.000Z"),
@@ -171,10 +172,13 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
     amount: tx.amount_centavos / 100,
     notes: tx.notes || "",
     group: categoryFor(tx) ? categoryFor(tx)!.budget_group[0].toUpperCase() + categoryFor(tx)!.budget_group.slice(1) : "Unallocated",
+    categoryId: tx.category_id && categoryById.has(tx.category_id) ? tx.category_id : "Uncategorized",
   })));
+  txSheet.getColumn("categoryId").hidden = true;
   txSheet.getColumn("amount").numFmt = pesosFormat;
   txSheet.getColumn("date").numFmt = dateFormat;
-  styleTable(txSheet, 1, 8, 1, true);
+  styleTable(txSheet, 1, 9, 1, true);
+  txSheet.autoFilter = { from: "A1", to: { row: Math.max(1, txSheet.rowCount), column: 9 } };
   txSheet.autoFilter = { from: "A1", to: { row: Math.max(1, txSheet.rowCount), column: 8 } };
 
   const budgetSheet = workbook.addWorksheet("Budget Analysis");
@@ -207,7 +211,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
     budgetSheet.addRow({
       category: category?.name ?? budget.category_name,
       limit: limitCents / 100,
-      actual: formulaCell(`SUMIFS(Transactions!$F:$F,Transactions!$D:$D,A${row},Transactions!$C:$C,"Expense",Transactions!$A:$A,">="&DATE(${Number(overlapStart.slice(0,4))},${Number(overlapStart.slice(5,7))},${Number(overlapStart.slice(8,10))}),Transactions!$A:$A,"<="&DATE(${Number(overlapEnd.slice(0,4))},${Number(overlapEnd.slice(5,7))},${Number(overlapEnd.slice(8,10))}))`, actualCents / 100),
+      actual: formulaCell("SUMIFS(Transactions!$F:$F,Transactions!$I:$I,\"" + budget.category_id + "\",Transactions!$C:$C,\"Expense\",Transactions!$A:$A,\">=\"&DATE(" + Number(overlapStart.slice(0,4)) + "," + Number(overlapStart.slice(5,7)) + "," + Number(overlapStart.slice(8,10)) + "),Transactions!$A:$A,\"<=\"&DATE(" + Number(overlapEnd.slice(0,4)) + "," + Number(overlapEnd.slice(5,7)) + "," + Number(overlapEnd.slice(8,10)) + "))", actualCents / 100),
       remaining: formulaCell(`B${row}-C${row}`, (limitCents - actualCents) / 100),
       percent: formulaCell(`IF(B${row}=0,0,C${row}/B${row})`, limitCents > 0 ? actualCents / limitCents : 0),
       status: formulaCell(`IF(C${row}>B${row},"Over Budget",IF(C${row}=B${row},"Limit Reached","Within Budget"))`, actualCents > limitCents ? "Over Budget" : actualCents === limitCents ? "Limit Reached" : "Within Budget"),
