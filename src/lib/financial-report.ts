@@ -69,7 +69,7 @@ function addReportHeading(sheet: ExcelJS.Worksheet, title: string, range: DateRa
   sheet.getCell(3, 1).font = { color: { argb: "FF647367" }, size: 9 };
 }
 
-function formulaCell(formula: string, result: number): ExcelJS.CellValue {
+function formulaCell(formula: string, result: number | string): ExcelJS.CellValue {
   return { formula, result };
 }
 
