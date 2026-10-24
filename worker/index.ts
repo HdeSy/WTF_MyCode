@@ -383,7 +383,7 @@ export default {
       }
 
       if (url.pathname === "/api/savings-goals" && request.method === "GET") {
-        const rows = await db.prepare("SELECT g.id,g.name,g.description,g.target_amount_centavos,g.target_date,(g.current_amount_centavos+COALESCE(SUM(t.amount_centavos),0)) AS current_amount_centavos,g.status FROM savings_goals g LEFT JOIN transactions t ON t.goal_id=g.id AND t.user_id=g.user_id AND t.transaction_type='savings_contribution' WHERE g.user_id=? GROUP BY g.id ORDER BY g.created_at DESC").bind(userId).all();
+        const rows = await db.prepare("SELECT g.id,g.name,g.description,g.target_amount_centavos,g.target_date,(g.current_amount_centavos+COALESCE(SUM(t.amount_centavos),0)) AS current_amount_centavos,CASE WHEN g.status='paused' THEN 'paused' WHEN g.current_amount_centavos+COALESCE(SUM(t.amount_centavos),0)>=g.target_amount_centavos THEN 'completed' ELSE 'active' END AS status FROM savings_goals g LEFT JOIN transactions t ON t.goal_id=g.id AND t.user_id=g.user_id AND t.transaction_type='savings_contribution' WHERE g.user_id=? GROUP BY g.id ORDER BY g.created_at DESC").bind(userId).all();
         return json({ data: rows.results ?? [] });
       }
 
