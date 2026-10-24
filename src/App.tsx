@@ -238,10 +238,12 @@ export default function App() {
 
   const updateGoal = async (goal: Goal) => {
     const raw = goalUpdates[goal.id] ?? (goal.current_amount_centavos / 100).toFixed(2);
-    const currentAmount = Number(raw);
-    if (!Number.isFinite(currentAmount) || currentAmount < 0 || currentAmount > 1_000_000_000) { setError("Saved amount must be between ₱0.00 and ₱1,000,000,000.00."); return; }
+    const totalSaved = Number(raw);
+    const linkedContributions = transactions.filter((tx) => tx.transaction_type === "savings_contribution" && tx.goal_id === goal.id).reduce((sum,tx) => sum + tx.amount_centavos,0);
+    if (!Number.isFinite(totalSaved) || totalSaved < linkedContributions / 100 || totalSaved > 1_000_000_000) { setError("Total saved must be at least the amount already tracked in linked contributions."); return; }
+    const baseSaved = totalSaved - linkedContributions / 100;
     setSaving(true); setError(""); setSuccess("");
-    try { await api("/api/savings-goals/" + goal.id, { method: "PATCH", body: JSON.stringify({ currentAmount, status: currentAmount >= goal.target_amount_centavos / 100 ? "completed" : "active" }) }); await refreshAll(); flash("Savings progress updated."); }
+    try { await api("/api/savings-goals/" + goal.id, { method: "PATCH", body: JSON.stringify({ currentAmount: baseSaved, status: totalSaved >= goal.target_amount_centavos / 100 ? "completed" : "active" }) }); await refreshAll(); flash("Savings progress updated."); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not update savings goal."); }
     finally { setSaving(false); }
   };
