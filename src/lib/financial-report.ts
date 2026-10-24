@@ -146,7 +146,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   summary.getCell(18 + reportCategoryRows.length, 1).value = "Note";
   summary.getCell(18 + reportCategoryRows.length, 2).value = "Category totals include only transactions categorized under each listed category; uncategorized transactions are not silently allocated.";
   summary.mergeCells(18 + reportCategoryRows.length, 2, 18 + reportCategoryRows.length, 4);
-  styleTable(summary, 5, 3, 5, false);
+  styleTable(summary, 5, 4, 5, false);
   summary.getRow(17).font = { bold: true, color: { argb: "FFFFFFFF" } };
   summary.getRow(17).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF285A43" } };
   summary.getRow(17).alignment = { vertical: "middle", wrapText: true };
