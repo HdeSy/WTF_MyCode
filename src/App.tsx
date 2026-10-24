@@ -443,7 +443,8 @@ function TransactionTable({ transactions, search, setSearch, filter, setFilter, 
   </>;
 }
 function DashboardPage({ dashboard, accounts, goals, transactions, setPage }: { dashboard: Dashboard | null; accounts: Account[]; goals: Goal[]; transactions: Transaction[]; setPage: (page: Page) => void }) {
-  const totals = dashboard?.totals;
+  const monthRange = getPeriodRange(manilaToday(), "Monthly");
+  const totals = summarizeTransactions(transactions, monthRange);
   const activeGoals = goals.filter((g) => g.status !== "paused");
   const goalTotal = activeGoals.reduce((sum, g) => sum + g.target_amount_centavos, 0);
   const goalSaved = activeGoals.reduce((sum, g) => sum + g.current_amount_centavos, 0);
@@ -451,15 +452,15 @@ function DashboardPage({ dashboard, accounts, goals, transactions, setPage }: { 
   const topCategories = Object.entries(expenseCategories).sort((a, b) => b[1] - a[1]).slice(0, 4);
   return <>
     <section className="summary-grid">
-      <MetricCard title="Total Income" value={money(totals?.income ?? 0)} icon={ArrowDownLeft} tone="green" caption="This month" />
-      <MetricCard title="Total Expenses" value={money(totals?.expenses ?? 0)} icon={ArrowUpRight} tone="orange" caption="This month" />
-      <MetricCard title="Savings" value={money(totals?.goalSavings ?? 0)} icon={Goal} tone="violet" caption="Across your goals" />
-      <MetricCard title="Remaining Balance" value={money(totals?.remainingBalance ?? 0)} icon={Wallet} tone="blue" caption="Across your accounts" />
+      <MetricCard title="Total Income" value={money(totals.income)} icon={ArrowDownLeft} tone="green" caption="This month" />
+      <MetricCard title="Total Expenses" value={money(totals.expenses)} icon={ArrowUpRight} tone="orange" caption="This month" />
+      <MetricCard title="Savings" value={money(totals.savingsContributions)} icon={Goal} tone="violet" caption="Savings contributions" />
+      <MetricCard title="Remaining Balance" value={money(totals.remainingBalance)} icon={Wallet} tone="blue" caption="Income less expenses and savings" />
     </section>
-    <div className="dashboard-grid"><section className="panel overview-panel"><div className="section-head"><div><span className="overline">MONTHLY OVERVIEW</span><h2>Income & expenses</h2><p>{dashboard?.period.start ? prettyDate(dashboard.period.start) + " – " + prettyDate(dashboard.period.end) : "Current month"} · Asia/Manila</p></div><span className="month-chip"><CalendarDays size={14} /> This month</span></div>
-      <div className="cashflow-numbers"><div><span className="legend-mark income-mark" />Income <b>{money(totals?.income ?? 0)}</b></div><div><span className="legend-mark expense-mark" />Expenses <b>{money(totals?.expenses ?? 0)}</b></div></div>
+    <div className="dashboard-grid"><section className="panel overview-panel"><div className="section-head"><div><span className="overline">MONTHLY OVERVIEW</span><h2>Income & expenses</h2><p>{prettyDate(monthRange.start) + " – " + prettyDate(monthRange.end)} · Asia/Manila</p></div><span className="month-chip"><CalendarDays size={14} /> This month</span></div>
+      <div className="cashflow-numbers"><div><span className="legend-mark income-mark" />Income <b>{money(totals.income)}</b></div><div><span className="legend-mark expense-mark" />Expenses <b>{money(totals.expenses)}</b></div></div>
       <div className="cashflow-bars"><div className="bar-group"><span>Income</span><div className="bar-bg"><span className="bar-income" style={{ width: (totals?.income ? Math.max(2, totals.income / Math.max(totals.income, totals.expenses, 1) * 100) : 0) + "%" }} /></div><b>{money(totals?.income ?? 0)}</b></div><div className="bar-group"><span>Expenses</span><div className="bar-bg"><span className="bar-expense" style={{ width: (totals?.expenses ? Math.max(2, totals.expenses / Math.max(totals.income, totals.expenses, 1) * 100) : 0) + "%" }} /></div><b>{money(totals?.expenses ?? 0)}</b></div></div>
-      <div className={"net-card " + ((totals?.savings ?? 0) >= 0 ? "net-positive" : "net-negative")}><span>{(totals?.savings ?? 0) >= 0 ? <TrendingUp size={18} /> : <ArrowDownRight size={18} />}Net cash flow this month</span><b>{money(totals?.savings ?? 0)}</b></div>
+      <div className={"net-card " + (totals.remainingBalance >= 0 ? "net-positive" : "net-negative")}><span>{totals.remainingBalance >= 0 ? <TrendingUp size={18} /> : <ArrowDownRight size={18} />}Remaining after expenses and savings</span><b>{money(totals.remainingBalance)}</b></div>
     </section>
     <section className="panel goal-overview-panel"><div className="section-head"><div><span className="overline">YOUR NEXT MILESTONES</span><h2>Savings goals</h2><p>Every little bit counts.</p></div><button className="text-link" onClick={() => setPage("Savings Goals")}>View all <ChevronRight size={15} /></button></div>
       {activeGoals.length ? <><div className="goal-summary"><div className="goal-ring" style={{ background: "conic-gradient(#69a681 " + Math.min(100, goalTotal ? goalSaved / goalTotal * 100 : 0) + "%, #edf2ec 0)" }}><span><b>{goalTotal ? Math.round(goalSaved / goalTotal * 100) : 0}%</b><small>saved</small></span></div><div><b>{money(goalSaved)}</b><small>of {money(goalTotal)} target</small><div className="goal-summary-note">{activeGoals.length} active goal{activeGoals.length === 1 ? "" : "s"}</div></div></div><div className="mini-goal-list">{activeGoals.slice(0, 3).map((g) => <div className="mini-goal" key={g.id}><div><span>{g.name}</span><b>{Math.round(g.current_amount_centavos / Math.max(1, g.target_amount_centavos) * 100)}%</b></div><div className="progress-track"><span style={{ width: Math.min(100, g.current_amount_centavos / Math.max(1, g.target_amount_centavos) * 100) + "%" }} /></div></div>)}</div></> : <EmptyState icon={Goal} title="Start a savings goal" description="Set a target and keep track of your progress." />}
