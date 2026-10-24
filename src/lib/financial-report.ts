@@ -179,7 +179,6 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   txSheet.getColumn("date").numFmt = dateFormat;
   styleTable(txSheet, 1, 9, 1, true);
   txSheet.autoFilter = { from: "A1", to: { row: Math.max(1, txSheet.rowCount), column: 9 } };
-  txSheet.autoFilter = { from: "A1", to: { row: Math.max(1, txSheet.rowCount), column: 8 } };
 
   const budgetSheet = workbook.addWorksheet("Budget Analysis");
   budgetSheet.columns = [
