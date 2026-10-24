@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import ExcelJS from "exceljs";
 import {
   ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, CircleHelp,
-  CreditCard, Download, Ellipsis, Goal, LayoutDashboard, LogOut, Plus,
+  CreditCard, Download, Ellipsis, Goal, LayoutDashboard, Plus,
   Search, Settings, ShieldCheck, Sparkles, Wallet, X,
 } from "lucide-react";
 import {
