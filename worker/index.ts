@@ -259,7 +259,7 @@ export default {
         return json({ data: { id: transactionId, account_id: accountId, category_id: categoryId, transaction_type: kind, amount_centavos: cents, transaction_date: date, description, payment_method: paymentMethod, notes: notes || null } }, 201);
       }
 
-      const transactionMatch = url.pathname.match(/^\\/api\\/transactions\\/([a-f0-9-]+)$/i);
+      const transactionMatch = url.pathname.match(/^\/api\/transactions\/([a-f0-9-]+)$/i);
       if (transactionMatch && request.method === "PUT") {
         const body = await readJson(request);
         const accountId = typeof body?.accountId === "string" ? body.accountId : "";
