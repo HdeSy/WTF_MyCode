@@ -113,7 +113,8 @@ describe("Excel financial report workbook", () => {
   it("handles an empty period and rejects impossible report dates", () => {
     const workbook = buildFinancialWorkbook({ ...input, range: { start: "2026-11-01", end: "2026-11-30" } });
     assert.equal(workbook.getWorksheet("Transactions")!.rowCount, 1);
-    assert.equal((workbook.getWorksheet("Financial Summary")!.getCell("B6").value as { result: number }).result, 0);
+    assert.equal(((workbook.getWorksheet("Financial Summary")!.getCell("B6").value as { result?: number }).result ?? 0), 0);
+    assert.match((workbook.getWorksheet("Financial Summary")!.getCell("B6").value as { formula: string }).formula, /SUMIF/);
     assert.throws(() => buildFinancialWorkbook({ ...input, range: { start: "2026-02-30", end: "2026-03-01" } }), /valid reporting date range/i);
   });
 });
