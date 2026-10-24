@@ -100,7 +100,6 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   workbook.created = exportedAt;
   workbook.modified = exportedAt;
   workbook.calcProperties.fullCalcOnLoad = true;
-  workbook.calcProperties.forceFullCalc = true;
 
   const summary = workbook.addWorksheet("Financial Summary");
   summary.columns = [{ width: 35 }, { width: 22 }, { width: 16 }];
