@@ -13,8 +13,10 @@ export interface Env {
 type SessionUser = { id: string; name: string; email: string };
 type TxRow = {
   id: string; account_id: string; category_id: string | null;
-  transaction_type: "income" | "expense" | "transfer";
-  amount_centavos: number; transaction_date: string; description: string | null;
+  transaction_type: "income" | "expense" | "savings_contribution" | "transfer";
+  amount_centavos: number; transaction_date: string; description: string;
+  payment_method: "cash" | "bank_transfer" | "e_wallet" | "credit_card" | "other";
+  notes: string | null;
   account_name?: string; category_name?: string | null;
 };
 
@@ -131,15 +133,14 @@ export default {
         const today = todayInManila();
         const sums = await db.prepare(`
           SELECT
-            COALESCE(SUM(CASE WHEN transaction_type='income' AND transaction_date BETWEEN ? AND ? THEN amount_centavos ELSE 0 END),0) AS income,
-            COALESCE(SUM(CASE WHEN transaction_type='expense' AND transaction_date BETWEEN ? AND ? THEN amount_centavos ELSE 0 END),0) AS expenses,
-            COALESCE(SUM(CASE WHEN transaction_type='income' THEN amount_centavos WHEN transaction_type='expense' THEN -amount_centavos ELSE 0 END),0) AS lifetime_net
-          FROM transactions WHERE user_id=?
-        `).bind(start, today, start, today, userId).first<{ income: number; expenses: number; lifetime_net: number }>();
-        const opening = await db.prepare("SELECT COALESCE(SUM(opening_balance_centavos),0) AS opening FROM accounts WHERE user_id=?").bind(userId).first<{ opening: number }>();
+            COALESCE(SUM(CASE WHEN transaction_type='income' THEN amount_centavos ELSE 0 END),0) AS income,
+            COALESCE(SUM(CASE WHEN transaction_type='expense' THEN amount_centavos ELSE 0 END),0) AS expenses,
+            COALESCE(SUM(CASE WHEN transaction_type='savings_contribution' THEN amount_centavos ELSE 0 END),0) AS savings_contributions
+          FROM transactions WHERE user_id=? AND transaction_date BETWEEN ? AND ?
+        `).bind(userId, start, today).first<{ income: number; expenses: number; savings_contributions: number }>();
         const goals = await db.prepare("SELECT COALESCE(SUM(current_amount_centavos),0) AS saved FROM savings_goals WHERE user_id=? AND status != 'paused'").bind(userId).first<{ saved: number }>();
         const recent = await db.prepare(`
-          SELECT t.id,t.account_id,t.category_id,t.transaction_type,t.amount_centavos,t.transaction_date,t.description,
+          SELECT t.id,t.account_id,t.category_id,t.transaction_type,t.amount_centavos,t.transaction_date,t.description,t.payment_method,t.notes,
                  a.name AS account_name,c.name AS category_name
           FROM transactions t JOIN accounts a ON a.id=t.account_id AND a.user_id=t.user_id
           LEFT JOIN categories c ON c.id=t.category_id AND c.user_id=t.user_id
@@ -150,8 +151,9 @@ export default {
           totals: {
             income: Number(sums?.income ?? 0),
             expenses: Number(sums?.expenses ?? 0),
-            savings: Number(sums?.income ?? 0) - Number(sums?.expenses ?? 0),
-            remainingBalance: Number(opening?.opening ?? 0) + Number(sums?.lifetime_net ?? 0),
+            savings: Number(sums?.savings_contributions ?? 0),
+            savingsContributions: Number(sums?.savings_contributions ?? 0),
+            remainingBalance: Number(sums?.income ?? 0) - Number(sums?.expenses ?? 0) - Number(sums?.savings_contributions ?? 0),
             goalSavings: Number(goals?.saved ?? 0),
           },
           recentTransactions: recent.results ?? [],
@@ -204,9 +206,13 @@ export default {
         const from = url.searchParams.get("from");
         const to = url.searchParams.get("to");
         const kind = url.searchParams.get("type");
+        const categoryId = url.searchParams.get("categoryId");
+        const paymentMethod = url.searchParams.get("paymentMethod");
         if ((from && !validDate(from)) || (to && !validDate(to))) return fail("Use dates in YYYY-MM-DD format.");
-        if (kind && !["income", "expense", "transfer"].includes(kind)) return fail("Choose a valid transaction type.");
-        let sql = `SELECT t.id,t.account_id,t.category_id,t.transaction_type,t.amount_centavos,t.transaction_date,t.description,
+        if (from && to && from > to) return fail("The end date must be on or after the start date.");
+        if (kind && !["income", "expense", "savings_contribution", "transfer"].includes(kind)) return fail("Choose a valid transaction type.");
+        if (paymentMethod && !["cash", "bank_transfer", "e_wallet", "credit_card", "other"].includes(paymentMethod)) return fail("Choose a valid payment method.");
+        let sql = `SELECT t.id,t.account_id,t.category_id,t.transaction_type,t.amount_centavos,t.transaction_date,t.description,t.payment_method,t.notes,
           a.name AS account_name,c.name AS category_name FROM transactions t
           JOIN accounts a ON a.id=t.account_id AND a.user_id=t.user_id
           LEFT JOIN categories c ON c.id=t.category_id AND c.user_id=t.user_id
@@ -215,7 +221,9 @@ export default {
         if (from) { sql += " AND t.transaction_date>=?"; args.push(from); }
         if (to) { sql += " AND t.transaction_date<=?"; args.push(to); }
         if (kind) { sql += " AND t.transaction_type=?"; args.push(kind); }
-        sql += " ORDER BY t.transaction_date DESC,t.created_at DESC LIMIT 500";
+        if (categoryId) { sql += " AND t.category_id=?"; args.push(categoryId); }
+        if (paymentMethod) { sql += " AND t.payment_method=?"; args.push(paymentMethod); }
+        sql += " ORDER BY t.transaction_date DESC,t.created_at DESC";
         const rows = await db.prepare(sql).bind(...args).all<TxRow>();
         return json({ data: rows.results ?? [] });
       }
@@ -223,29 +231,59 @@ export default {
       if (url.pathname === "/api/transactions" && request.method === "POST") {
         const body = await readJson(request);
         const accountId = typeof body?.accountId === "string" ? body.accountId : "";
-        const categoryId = typeof body?.categoryId === "string" && body.categoryId ? body.categoryId : null;
+        const categoryId = typeof body?.categoryId === "string" ? body.categoryId : "";
         const kind = body?.type;
         const cents = amountCentavos(body?.amount);
         const date = body?.date;
         const description = typeof body?.description === "string" ? body.description.trim() : "";
-        if (kind !== "income" && kind !== "expense") return fail("Choose income or expense.");
+        const paymentMethod = body?.paymentMethod;
+        const notes = typeof body?.notes === "string" ? body.notes.trim() : "";
+        if (kind !== "income" && kind !== "expense" && kind !== "savings_contribution") return fail("Choose income, expense, or savings contribution.");
         if (cents === null) return fail("Enter an amount greater than ₱0.00 and no more than ₱1,000,000,000.00.");
         if (!validDate(date)) return fail("Choose a valid transaction date.");
         if (date > todayInManila()) return fail("Transaction date cannot be in the future (Asia/Manila).");
-        if (description.length > 180) return fail("Description must be 180 characters or fewer.");
+        if (!description || description.length > 180) return fail("Description is required and must be 180 characters or fewer.");
+        if (notes.length > 1000) return fail("Notes must be 1,000 characters or fewer.");
+        if (!["cash", "bank_transfer", "e_wallet", "credit_card", "other"].includes(String(paymentMethod))) return fail("Choose a valid payment method.");
         const ownedAccount = await db.prepare("SELECT id FROM accounts WHERE id=? AND user_id=?").bind(accountId,userId).first();
         if (!ownedAccount) return fail("Choose one of your own accounts.", 403);
-        if (categoryId) {
-          const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=?").bind(categoryId,userId,kind).first();
-          if (!category) return fail("Choose a category belonging to your account and transaction type.", 403);
-        }
+        const categoryKind = kind === "savings_contribution" ? "expense" : kind;
+        const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=?").bind(categoryId,userId,categoryKind).first();
+        if (!category) return fail("Choose a category belonging to your account and transaction type.", 403);
         const transactionId = id();
-        await db.prepare("INSERT INTO transactions (id,user_id,account_id,category_id,transaction_type,amount_centavos,transaction_date,description) VALUES (?,?,?,?,?,?,?,?)")
-          .bind(transactionId,userId,accountId,categoryId,kind,cents,date,description || null).run();
-        return json({ data: { id: transactionId, account_id: accountId, category_id: categoryId, transaction_type: kind, amount_centavos: cents, transaction_date: date, description: description || null } }, 201);
+        await db.prepare("INSERT INTO transactions (id,user_id,account_id,category_id,transaction_type,amount_centavos,transaction_date,description,payment_method,notes) VALUES (?,?,?,?,?,?,?,?,?,?)")
+          .bind(transactionId,userId,accountId,categoryId,kind,cents,date,description,paymentMethod,notes || null).run();
+        return json({ data: { id: transactionId, account_id: accountId, category_id: categoryId, transaction_type: kind, amount_centavos: cents, transaction_date: date, description, payment_method: paymentMethod, notes: notes || null } }, 201);
       }
 
-      const transactionMatch = url.pathname.match(/^\/api\/transactions\/([a-f0-9-]+)$/i);
+      const transactionMatch = url.pathname.match(/^\\/api\\/transactions\\/([a-f0-9-]+)$/i);
+      if (transactionMatch && request.method === "PUT") {
+        const body = await readJson(request);
+        const accountId = typeof body?.accountId === "string" ? body.accountId : "";
+        const categoryId = typeof body?.categoryId === "string" ? body.categoryId : "";
+        const kind = body?.type;
+        const cents = amountCentavos(body?.amount);
+        const date = body?.date;
+        const description = typeof body?.description === "string" ? body.description.trim() : "";
+        const paymentMethod = body?.paymentMethod;
+        const notes = typeof body?.notes === "string" ? body.notes.trim() : "";
+        if (kind !== "income" && kind !== "expense" && kind !== "savings_contribution") return fail("Choose income, expense, or savings contribution.");
+        if (cents === null) return fail("Enter an amount greater than ₱0.00 and no more than ₱1,000,000,000.00.");
+        if (!validDate(date)) return fail("Choose a valid transaction date.");
+        if (date > todayInManila()) return fail("Transaction date cannot be in the future (Asia/Manila).");
+        if (!description || description.length > 180) return fail("Description is required and must be 180 characters or fewer.");
+        if (notes.length > 1000) return fail("Notes must be 1,000 characters or fewer.");
+        if (!["cash", "bank_transfer", "e_wallet", "credit_card", "other"].includes(String(paymentMethod))) return fail("Choose a valid payment method.");
+        const ownedAccount = await db.prepare("SELECT id FROM accounts WHERE id=? AND user_id=?").bind(accountId,userId).first();
+        if (!ownedAccount) return fail("Choose one of your own accounts.", 403);
+        const categoryKind = kind === "savings_contribution" ? "expense" : kind;
+        const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=?").bind(categoryId,userId,categoryKind).first();
+        if (!category) return fail("Choose a category belonging to your account and transaction type.", 403);
+        const result = await db.prepare("UPDATE transactions SET account_id=?,category_id=?,transaction_type=?,amount_centavos=?,transaction_date=?,description=?,payment_method=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?")
+          .bind(accountId,categoryId,kind,cents,date,description,paymentMethod,notes || null,transactionMatch[1],userId).run();
+        if (!result.meta.changes) return fail("Transaction not found.", 404);
+        return json({ ok: true });
+      }
       if (transactionMatch && request.method === "DELETE") {
         const result = await db.prepare("DELETE FROM transactions WHERE id=? AND user_id=?").bind(transactionMatch[1],userId).run();
         if (!result.meta.changes) return fail("Transaction not found.", 404);
