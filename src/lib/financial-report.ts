@@ -31,7 +31,7 @@ const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Numbe
 const dayNumber = (value: string) => Date.parse(value + "T00:00:00Z") / 86_400_000;
 const intersects = (aStart: string, aEnd: string, bStart: string, bEnd: string) => aStart <= bEnd && aEnd >= bStart;
 
-function styleTable(sheet: ExcelJS.Worksheet, headerRow: number, lastColumn: number, freezeRows: number) {
+function styleTable(sheet: ExcelJS.Worksheet, headerRow: number, lastColumn: number, freezeRows: number, filter = false) {
   const header = sheet.getRow(headerRow);
   header.height = 28;
   header.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
@@ -52,7 +52,7 @@ function styleTable(sheet: ExcelJS.Worksheet, headerRow: number, lastColumn: num
   }
   sheet.views = [{ state: "frozen", ySplit: freezeRows }];
   sheet.properties.defaultRowHeight = 20;
-  if (lastColumn > 0 && sheet.rowCount >= headerRow) sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: Math.max(headerRow, sheet.rowCount), column: lastColumn } };
+  if (filter && lastColumn > 0 && sheet.rowCount >= headerRow) sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: Math.max(headerRow, sheet.rowCount), column: lastColumn } };
 }
 
 function addReportHeading(sheet: ExcelJS.Worksheet, title: string, range: DateRange, exportDate: string, lastColumn: number) {
@@ -81,7 +81,6 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   const exportDate = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" }).format(exportedAt);
   const transactions = input.transactions
     .filter((tx) => tx.transaction_date >= input.range.start && tx.transaction_date <= input.range.end)
-    .filter((tx) => tx.transaction_type !== "transfer")
     .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date) || a.id.localeCompare(b.id));
   const categoryById = new Map(input.categories.map((category) => [category.id, category]));
   const categoryFor = (tx: ReportTransaction) => tx.category_id ? categoryById.get(tx.category_id) : undefined;
@@ -131,13 +130,16 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   summary.getRow(17).values = ["Category", "Group", "Amount (PHP)", "% of Total Income"];
   summary.getRow(17).getCell(4).value = "% of Total Income";
   summary.getColumn(4).width = 20;
-  const reportCategoryRows = input.categories.filter((category) => category.kind === "income" || ["needs", "wants", "savings"].includes(category.budget_group));
+  const reportCategoryRows = input.categories.filter((category) => category.kind === "income" || ["needs", "wants", "savings"].includes(category.budget_group)).map((category) => ({ id: category.id, name: category.name, budget_group: category.budget_group }));
+  const hasUncategorized = transactions.some((tx) => tx.transaction_type !== "transfer" && (!tx.category_id || !categoryById.has(tx.category_id)));
+  if (hasUncategorized) reportCategoryRows.push({ id: "__uncategorized__", name: "Uncategorized", budget_group: "income" === "none" ? "income" : "savings" });
   reportCategoryRows.forEach((category, index) => {
     const row = 18 + index;
-    const amountCents = cents(transactions.filter((tx) => tx.category_id === category.id && tx.transaction_type !== "transfer").map((tx) => tx.amount_centavos));
+    const unallocatedRow = category.id === "__uncategorized__";
+    const amountCents = cents(transactions.filter((tx) => tx.transaction_type !== "transfer" && (unallocatedRow ? (!tx.category_id || !categoryById.has(tx.category_id)) : tx.category_id === category.id)).map((tx) => tx.amount_centavos));
     summary.getCell(row, 1).value = category.name;
-    summary.getCell(row, 2).value = category.budget_group[0].toUpperCase() + category.budget_group.slice(1);
-    summary.getCell(row, 3).value = formulaCell(`SUMIFS(Transactions!$F:$F,Transactions!$D:$D,A${row},Transactions!$H:$H,B${row})`, amountCents / 100);
+    summary.getCell(row, 2).value = unallocatedRow ? "Unallocated" : category.budget_group[0].toUpperCase() + category.budget_group.slice(1);
+    summary.getCell(row, 3).value = unallocatedRow ? formulaCell(`SUMIFS(Transactions!$F:$F,Transactions!$D:$D,A${row},Transactions!$H:$H,B${row},Transactions!$C:$C,"<>Transfer")`, amountCents / 100) : formulaCell(`SUMIFS(Transactions!$F:$F,Transactions!$D:$D,A${row},Transactions!$H:$H,B${row},Transactions!$C:$C,"<>Transfer")`, amountCents / 100);
     summary.getCell(row, 3).numFmt = pesosFormat;
     summary.getCell(row, 4).value = formulaCell(`IF($B$6=0,0,C${row}/$B$6)`, incomeCents > 0 ? amountCents / incomeCents : 0);
     summary.getCell(row, 4).numFmt = percentFormat;
@@ -145,7 +147,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   summary.getCell(18 + reportCategoryRows.length, 1).value = "Note";
   summary.getCell(18 + reportCategoryRows.length, 2).value = "Category totals include only transactions categorized under each listed category; uncategorized transactions are not silently allocated.";
   summary.mergeCells(18 + reportCategoryRows.length, 2, 18 + reportCategoryRows.length, 4);
-  styleTable(summary, 5, 3, 5);
+  styleTable(summary, 5, 3, 5, false);
   summary.getRow(17).font = { bold: true, color: { argb: "FFFFFFFF" } };
   summary.getRow(17).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF285A43" } };
   summary.getRow(17).alignment = { vertical: "middle", wrapText: true };
@@ -162,7 +164,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
     { header: "Category Group", key: "group", width: 18 },
   ];
   txSheet.addRows(transactions.map((tx) => ({
-    date: tx.transaction_date,
+    date: new Date(tx.transaction_date + "T00:00:00.000Z"),
     description: tx.description || "",
     type: tx.transaction_type === "savings_contribution" ? "Savings Contribution" : tx.transaction_type[0].toUpperCase() + tx.transaction_type.slice(1),
     category: tx.category_name || (tx.category_id ? categoryById.get(tx.category_id)?.name : "") || "Uncategorized",
@@ -173,18 +175,23 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   })));
   txSheet.getColumn("amount").numFmt = pesosFormat;
   txSheet.getColumn("date").numFmt = dateFormat;
-  styleTable(txSheet, 1, 8, 1);
+  styleTable(txSheet, 1, 8, 1, true);
   txSheet.autoFilter = { from: "A1", to: { row: Math.max(1, txSheet.rowCount), column: 8 } };
 
   const budgetSheet = workbook.addWorksheet("Budget Analysis");
   budgetSheet.columns = [
-    { header: "Category", key: "category", width: 25 },
-    { header: "Budget Limit (PHP)", key: "limit", width: 21 },
-    { header: "Actual Spending (PHP)", key: "actual", width: 23 },
-    { header: "Remaining Budget (PHP)", key: "remaining", width: 24 },
-    { header: "Percentage Used", key: "percent", width: 18 },
-    { header: "Status", key: "status", width: 20 },
+    { key: "category", width: 25 },
+    { key: "limit", width: 21 },
+    { key: "actual", width: 23 },
+    { key: "remaining", width: 24 },
+    { key: "percent", width: 18 },
+    { key: "status", width: 20 },
   ];
+  addReportHeading(budgetSheet, "BUDGET ANALYSIS", input.range, exportDate, 6);
+  budgetSheet.getCell(4, 1).value = "Budget limits are prorated by the number of overlapping calendar days in the selected reporting period.";
+  budgetSheet.mergeCells(4, 1, 4, 6);
+  budgetSheet.getCell(4, 1).font = { italic: true, color: { argb: "FF647367" }, size: 9 };
+  budgetSheet.getRow(5).values = ["Category", "Budget Limit (PHP)", "Actual Spending (PHP)", "Remaining Budget (PHP)", "Percentage Used", "Status"];
   const applicableBudgets = input.budgets.filter((budget) => intersects(budget.period_start, budget.period_end, input.range.start, input.range.end));
   const budgetResults = applicableBudgets.map((budget) => {
     const category = categoryById.get(budget.category_id);
@@ -197,11 +204,11 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
     return { budget, category, limitCents, actualCents };
   });
   budgetResults.forEach(({ budget, category, limitCents, actualCents }, index) => {
-    const row = index + 2;
+    const row = index + 6;
     budgetSheet.addRow({
       category: category?.name ?? budget.category_name,
       limit: limitCents / 100,
-      actual: formulaCell(`SUMIFS(Transactions!$F:$F,Transactions!$D:$D,A${row},Transactions!$C:$C,"Expense",Transactions!$A:$A,">="&"${budget.period_start}",Transactions!$A:$A,"<="&"${budget.period_end}")`, actualCents / 100),
+      actual: formulaCell(`SUMIFS(Transactions!$F:$F,Transactions!$D:$D,A${row},Transactions!$C:$C,"Expense",Transactions!$A:$A,">="&DATE(${Number(overlapStart.slice(0,4))},${Number(overlapStart.slice(5,7))},${Number(overlapStart.slice(8,10))}),Transactions!$A:$A,"<="&DATE(${Number(overlapEnd.slice(0,4))},${Number(overlapEnd.slice(5,7))},${Number(overlapEnd.slice(8,10))}))`, actualCents / 100),
       remaining: formulaCell(`B${row}-C${row}`, (limitCents - actualCents) / 100),
       percent: formulaCell(`IF(B${row}=0,0,C${row}/B${row})`, limitCents > 0 ? actualCents / limitCents : 0),
       status: formulaCell(`IF(C${row}>B${row},"Over Budget",IF(C${row}=B${row},"Limit Reached","Within Budget"))`, actualCents > limitCents ? "Over Budget" : actualCents === limitCents ? "Limit Reached" : "Within Budget"),
@@ -211,10 +218,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   budgetSheet.getColumn("actual").numFmt = pesosFormat;
   budgetSheet.getColumn("remaining").numFmt = pesosFormat;
   budgetSheet.getColumn("percent").numFmt = percentFormat;
-  addReportHeading(budgetSheet, "BUDGET ANALYSIS", input.range, exportDate, 6);
-  budgetSheet.insertRow(4, ["Budget limits are prorated by the number of overlapping calendar days in the selected reporting period."]);
-  budgetSheet.mergeCells(4, 1, 4, 6);
-  styleTable(budgetSheet, 5, 6, 5);
+  styleTable(budgetSheet, 5, 6, 5, true);
 
   const goalsSheet = workbook.addWorksheet("Savings Goals");
   goalsSheet.columns = [
@@ -245,6 +249,6 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   for (const key of ["target", "saved", "remaining"]) goalsSheet.getColumn(key).numFmt = pesosFormat;
   goalsSheet.getColumn("progress").numFmt = percentFormat;
   goalsSheet.getColumn("date").numFmt = dateFormat;
-  styleTable(goalsSheet, 5, 6, 5);
+  styleTable(goalsSheet, 5, 6, 5, true);
   return workbook;
 }
