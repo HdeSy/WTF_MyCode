@@ -20,7 +20,7 @@ This guide targets **Cloudflare Workers + the Cloudflare Vite plugin + D1**. Do 
 
 The ChatGPT GitHub connection can edit this repository, but it does not have a Cloudflare account/API connection. No Cloudflare resource, secret, domain, or deployment can be created from this repository connection alone. Complete these steps in the Cloudflare dashboard:
 
-1. Open **Workers & Pages** and connect GitHub if it is not already connected. Select `HdeSy/WTF_MyCode`, production branch `main`, root directory `/`, and Worker name `budgetwise-personal-tracker`. Enable automatic production deploys from `main`; keep feature-branch preview deployments separate from production.
+1. Pull request [#1](https://github.com/HdeSy/WTF_MyCode/pull/1) is still a draft, so **do not point production at `main` until the reviewed application changes have been merged**. You may connect the feature branch for preview testing first. In **Workers & Pages**, connect GitHub and select `HdeSy/WTF_MyCode`, repository root `/`, and Worker name `budgetwise-personal-tracker`. After the production-ready PR is merged, select `main` as the production branch and enable automatic production deploys.
 2. In **D1**, create a **new, empty** database named `budgetwise-db` in the same account. Copy its database ID into `wrangler.jsonc` in the repository and commit that non-secret configuration change. Do not use a database ID from another account.
 3. In the Worker settings, add `BETTER_AUTH_SECRET` as an encrypted **Secret**, using a unique random value of at least 32 bytes. Never store it in source control, a committed `.dev.vars`, or logs. The Worker will return HTTP 503 for auth/private APIs until this secret is configured.
 4. Once the first Worker URL is known, set `BETTER_AUTH_URL` as a normal Worker variable to the exact origin (for example, `https://budgetwise-personal-tracker.<your-workers-subdomain>.workers.dev`). Do not include a trailing path. If you later switch to a custom domain, update this variable to the final HTTPS origin and redeploy.
@@ -61,7 +61,7 @@ Before using real financial records, test registration, sign-in, sign-out, expir
 
 ## Custom domain and HTTPS
 
-After the Worker works on its `workers.dev` address, open **Workers & Pages → budgetwise-personal-tracker → Settings → Domains & Routes → Add → Custom Domain**. Use a domain or subdomain that you control and that is active in the Cloudflare account. Cloudflare creates the required DNS record and provisions the TLS certificate for a supported Custom Domain. Do not manually replace existing production DNS records without checking what they serve. Set `BETTER_AUTH_URL` to the exact custom HTTPS origin and redeploy, then test registration/login cookies and the Excel download on that origin.
+After the Worker works on its `workers.dev` address, choose a domain or subdomain you control and that is active in the Cloudflare account. Add the selected hostname to `wrangler.jsonc` under `routes` with `custom_domain` set to `true`, then commit that configuration change before deploying. Cloudflare creates the required DNS record and provisions the TLS certificate for a supported Custom Domain. Do not manually replace existing production DNS records without checking what they serve. Set `BETTER_AUTH_URL` to the exact custom HTTPS origin and redeploy, then test registration/login cookies and the Excel download on that origin.
 
 No domain has been selected or connected yet, so the final URL is not known.
 
