@@ -347,6 +347,28 @@ export default {
         return json({ data: { id: budgetId, category_id: categoryId, period_start: start, period_end: end, amount_centavos: cents } }, 201);
       }
 
+      const budgetMatch = url.pathname.match(/^\\/api\\/budgets\\/([a-f0-9-]+)$/i);
+      if (budgetMatch && request.method === "PUT") {
+        const body = await readJson(request);
+        const categoryId = typeof body?.categoryId === "string" ? body.categoryId : "";
+        const cents = amountCentavos(body?.amount);
+        const start = body?.periodStart, end = body?.periodEnd;
+        if (cents === null) return fail("Enter a budget amount greater than ₱0.00.");
+        if (!validDate(start) || !validDate(end) || start > end) return fail("Choose a valid budget period.");
+        const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=?").bind(categoryId,userId,"expense").first();
+        if (!category) return fail("Choose one of your own expense categories.",403);
+        try {
+          const result = await db.prepare("UPDATE budgets SET category_id=?,period_start=?,period_end=?,amount_centavos=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?").bind(categoryId,start,end,cents,budgetMatch[1],userId).run();
+          if (!result.meta.changes) return fail("Budget not found.",404);
+        } catch { return fail("A budget already exists for that category and date range.",409); }
+        return json({ok:true});
+      }
+      if (budgetMatch && request.method === "DELETE") {
+        const result = await db.prepare("DELETE FROM budgets WHERE id=? AND user_id=?").bind(budgetMatch[1],userId).run();
+        if (!result.meta.changes) return fail("Budget not found.",404);
+        return json({ok:true});
+      }
+
       if (url.pathname === "/api/savings-goals" && request.method === "GET") {
         const rows = await db.prepare("SELECT id,name,target_amount_centavos,target_date,current_amount_centavos,status FROM savings_goals WHERE user_id=? ORDER BY created_at DESC").bind(userId).all();
         return json({ data: rows.results ?? [] });
