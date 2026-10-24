@@ -36,15 +36,8 @@ function manilaToday() {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 function manilaMonthStart() { return manilaToday().slice(0, 8) + "01"; }
-function reportWindow(period: "Daily" | "Weekly" | "Monthly") {
-  const today = manilaToday();
-  if (period === "Daily") return { start: today, end: today };
-  if (period === "Monthly") return { start: today.slice(0, 8) + "01", end: today };
-  const cursor = new Date(today + "T00:00:00Z");
-  const mondayOffset = (cursor.getUTCDay() + 6) % 7;
-  cursor.setUTCDate(cursor.getUTCDate() - mondayOffset);
-  return { start: cursor.toISOString().slice(0, 10), end: today };
-}
+function reportWindow(period: "Daily" | "Weekly" | "Monthly") { return getPeriodRange(manilaToday(), period); }
+
 function prettyDate(value: string) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(value.slice(0, 10) + "T12:00:00+08:00"));
@@ -256,10 +249,11 @@ export default function App() {
   const exportExcel = async () => {
     setSaving(true); setError(""); setSuccess("");
     try {
-      const range = reportWindow(reportPeriod);
+      const range = getPeriodRange(manilaToday(), reportPeriod);
       const reportTransactions = transactions.filter((tx) => tx.transaction_date >= range.start && tx.transaction_date <= range.end);
-      const reportIncome = reportTransactions.filter((tx) => tx.transaction_type === "income").reduce((sum, tx) => sum + tx.amount_centavos, 0);
-      const reportExpenses = reportTransactions.filter((tx) => tx.transaction_type === "expense").reduce((sum, tx) => sum + tx.amount_centavos, 0);
+      const reportTotals = summarizeTransactions(reportTransactions, range);
+      const reportIncome = reportTotals.income;
+      const reportExpenses = reportTotals.expenses;
       const reportBudgets = budgets.filter((b) => b.period_end >= range.start && b.period_start <= range.end);
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "Budgetwise"; workbook.created = new Date();
@@ -271,14 +265,14 @@ export default function App() {
         { metric: "Period", amount: range.start + " to " + range.end },
         { metric: "Total income", amount: reportIncome / 100 },
         { metric: "Total expenses", amount: reportExpenses / 100 },
-        { metric: "Net cash flow", amount: (reportIncome - reportExpenses) / 100 },
+        { metric: "Savings contributions", amount: reportTotals.savingsContributions / 100 },
+        { metric: "Remaining balance", amount: reportTotals.remainingBalance / 100 },
         { metric: "Savings across goals", amount: (dashboard?.totals.goalSavings ?? 0) / 100 },
-        { metric: "Remaining account balance", amount: (dashboard?.totals.remainingBalance ?? 0) / 100 },
       ]);
       const txSheet = workbook.addWorksheet("Transaction Details");
-      txSheet.columns = [{ header: "Date", key: "date", width: 16 }, { header: "Description", key: "description", width: 30 }, { header: "Category", key: "category", width: 22 }, { header: "Account", key: "account", width: 22 }, { header: "Type", key: "type", width: 14 }, { header: "Amount (PHP)", key: "amount", width: 18 }];
-      txSheet.addRows(reportTransactions.map((tx) => ({ date: tx.transaction_date, description: tx.description || "", category: tx.category_name || "", account: tx.account_name || "", type: tx.transaction_type, amount: (tx.transaction_type === "expense" ? -tx.amount_centavos : tx.amount_centavos) / 100 })));
-      txSheet.autoFilter = { from: "A1", to: "F1" };
+      txSheet.columns = [{ header: "Date", key: "date", width: 16 }, { header: "Description", key: "description", width: 30 }, { header: "Category", key: "category", width: 22 }, { header: "Account", key: "account", width: 22 }, { header: "Type", key: "type", width: 22 }, { header: "Payment method", key: "payment", width: 20 }, { header: "Amount (PHP)", key: "amount", width: 18 }, { header: "Notes", key: "notes", width: 36 }];
+      txSheet.addRows(reportTransactions.map((tx) => ({ date: tx.transaction_date, description: tx.description || "", category: tx.category_name || "", account: tx.account_name || "", type: tx.transaction_type, payment: tx.payment_method, amount: (tx.transaction_type === "expense" || tx.transaction_type === "savings_contribution" ? -tx.amount_centavos : tx.amount_centavos) / 100, notes: tx.notes || "" })));
+      txSheet.autoFilter = { from: "A1", to: "H1" };
       const budgetSheet = workbook.addWorksheet("Budget Analysis");
       budgetSheet.columns = [{ header: "Category", key: "category", width: 24 }, { header: "Period start", key: "start", width: 16 }, { header: "Period end", key: "end", width: 16 }, { header: "Budget (PHP)", key: "budget", width: 18 }, { header: "Spent (PHP)", key: "spent", width: 18 }, { header: "Remaining (PHP)", key: "remaining", width: 20 }];
       budgetSheet.addRows(reportBudgets.map((b) => ({ category: b.category_name, start: b.period_start, end: b.period_end, budget: b.amount_centavos / 100, spent: b.spent_centavos / 100, remaining: (b.amount_centavos - b.spent_centavos) / 100 })));
