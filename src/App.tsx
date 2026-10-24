@@ -412,7 +412,7 @@ export default function App() {
           {success && <div className="alert alert-success global-alert" role="status"><Check size={17} /><span>{success}</span><button onClick={() => setSuccess("")} aria-label="Dismiss success"><X size={16} /></button></div>}
 
           {loading ? <div className="loading-panel"><LoaderCircle className="spin" size={24} /><span>Loading your private financial records…</span></div> : <>
-            {page === "Dashboard" && <DashboardPage accounts={accounts} goals={goals} transactions={transactions} setPage={setPage} />}
+            {page === "Dashboard" && <DashboardPage accounts={accounts} categories={categories} goals={goals} transactions={transactions} setPage={setPage} />}
             {page === "Transactions" && <div className="transaction-workspace">
               <section className="panel period-panel">
                 <div className="section-head"><div><span className="overline">PERIOD SUMMARY</span><h2>Your money movement</h2><p>All dates are calendar dates in Asia/Manila.</p></div></div>
@@ -567,14 +567,31 @@ function TransactionTable({ transactions, search, setSearch, filter, setFilter, 
     <div className="table-foot"><span>Showing {transactions.length} matching saved record{transactions.length === 1 ? "" : "s"}</span></div>
   </>;
 }
-function DashboardPage({ accounts, goals, transactions, setPage }: { accounts: Account[]; goals: Goal[]; transactions: Transaction[]; setPage: (page: Page) => void }) {
+function DashboardPage({ accounts, categories, goals, transactions, setPage }: { accounts: Account[]; categories: Category[]; goals: Goal[]; transactions: Transaction[]; setPage: (page: Page) => void }) {
+  const [weekAnchor, setWeekAnchor] = useState(manilaToday());
+  const [selectedPieSlice, setSelectedPieSlice] = useState(0);
+  const weekRange = getPeriodRange(weekAnchor || manilaToday(), "Weekly");
   const monthRange = getPeriodRange(manilaToday(), "Monthly");
+  const weekTransactions = transactions.filter((tx) => tx.transaction_date >= weekRange.start && tx.transaction_date <= weekRange.end);
+  const weekTotals = summarizeTransactions(weekTransactions, weekRange);
   const totals = summarizeTransactions(transactions, monthRange);
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const pieData = [
+    { name: "Weekly Savings", amount: weekTotals.savingsContributions, color: "#8d7bc2" },
+    { name: "Needs", amount: weekTransactions.filter((tx) => tx.transaction_type === "expense" && categoryById.get(tx.category_id || "")?.budget_group === "needs").reduce((sum,tx) => sum + tx.amount_centavos,0), color: "#5b9c79" },
+    { name: "Wants", amount: weekTransactions.filter((tx) => tx.transaction_type === "expense" && categoryById.get(tx.category_id || "")?.budget_group === "wants").reduce((sum,tx) => sum + tx.amount_centavos,0), color: "#e1a15e" },
+  ];
+  const pieTotal = pieData.reduce((sum, item) => sum + item.amount, 0);
+  const pieIncome = weekTotals.income;
+  let cursor = 0;
+  const pieStops = pieData.map((item) => { const start = cursor; cursor += pieTotal > 0 ? item.amount / pieTotal * 100 : 0; return item.color + " " + start + "% " + cursor + "%"; }).join(", ");
+  const unallocated = pieIncome - pieTotal;
+  const expenseCategories = weekTransactions.filter((tx) => tx.transaction_type === "expense").reduce<Record<string, number>>((acc, tx) => { const key = tx.category_name || "Uncategorized"; acc[key] = (acc[key] || 0) + tx.amount_centavos; return acc; }, {});
+  const topCategories = Object.entries(expenseCategories).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const topExpenseTotal = Object.values(expenseCategories).reduce((sum,amount) => sum + amount,0);
   const activeGoals = goals.filter((g) => g.status !== "paused");
   const goalTotal = activeGoals.reduce((sum, g) => sum + g.target_amount_centavos, 0);
   const goalSaved = activeGoals.reduce((sum, g) => sum + g.current_amount_centavos, 0);
-  const expenseCategories = transactions.filter((tx) => tx.transaction_type === "expense" && tx.transaction_date >= monthRange.start && tx.transaction_date <= monthRange.end).reduce<Record<string, number>>((acc, tx) => { const key = tx.category_name || "Uncategorized"; acc[key] = (acc[key] || 0) + tx.amount_centavos; return acc; }, {});
-  const topCategories = Object.entries(expenseCategories).sort((a, b) => b[1] - a[1]).slice(0, 4);
   return <>
     <section className="summary-grid">
       <MetricCard title="Total Income" value={money(totals.income)} icon={ArrowDownLeft} tone="green" caption="This month" />
@@ -591,14 +608,35 @@ function DashboardPage({ accounts, goals, transactions, setPage }: { accounts: A
       {activeGoals.length ? <><div className="goal-summary"><div className="goal-ring" style={{ background: "conic-gradient(#69a681 " + Math.min(100, goalTotal ? goalSaved / goalTotal * 100 : 0) + "%, #edf2ec 0)" }}><span><b>{goalTotal ? Math.round(goalSaved / goalTotal * 100) : 0}%</b><small>saved</small></span></div><div><b>{money(goalSaved)}</b><small>of {money(goalTotal)} target</small><div className="goal-summary-note">{activeGoals.length} active goal{activeGoals.length === 1 ? "" : "s"}</div></div></div><div className="mini-goal-list">{activeGoals.slice(0, 3).map((g) => <div className="mini-goal" key={g.id}><div><span>{g.name}</span><b>{Math.round(g.current_amount_centavos / Math.max(1, g.target_amount_centavos) * 100)}%</b></div><div className="progress-track"><span style={{ width: Math.min(100, g.current_amount_centavos / Math.max(1, g.target_amount_centavos) * 100) + "%" }} /></div></div>)}</div></> : <EmptyState icon={Goal} title="Start a savings goal" description="Set a target and keep track of your progress." />}
       <button className="outline-full" onClick={() => setPage("Savings Goals")}><Plus size={16} /> Manage savings goals</button>
     </section></div>
+    <section className="panel weekly-chart-panel">
+      <div className="section-head"><div><span className="overline">WEEKLY ALLOCATION</span><h2>Savings, needs & wants</h2><p>Category amounts are compared with total income for the selected week.</p></div>
+        <div className="period-date-controls"><button className="btn btn-secondary btn-small" type="button" onClick={() => setWeekAnchor(shiftPeriod(weekAnchor || manilaToday(),"Weekly",-1))}><ChevronRight size={14} style={{transform:"rotate(180deg)"}} /> Previous</button><label>Week anchor<input type="date" value={weekAnchor} onChange={(e) => setWeekAnchor(e.target.value)} /></label><button className="btn btn-secondary btn-small" type="button" onClick={() => setWeekAnchor(shiftPeriod(weekAnchor || manilaToday(),"Weekly",1))}>Next <ChevronRight size={14} /></button></div>
+      </div>
+      <p className="active-range-label">{prettyDate(weekRange.start)} – {prettyDate(weekRange.end)} · Monday–Sunday · Asia/Manila</p>
+      {pieIncome <= 0 ? <EmptyState icon={BarChart3} title="No income for this week" description="The weekly allocation chart appears when the selected week has income. There is no division by zero." /> : <div className="weekly-chart-layout">
+        <div className="allocation-pie-wrap"><button className="allocation-pie" type="button" aria-label={"Weekly allocation pie chart. Selected slice: " + pieData[selectedPieSlice].name} style={{background: pieTotal > 0 ? "conic-gradient(" + pieStops + ")" : "conic-gradient(#edf2ec 0 100%)"}} onClick={() => setSelectedPieSlice((selectedPieSlice+1)%pieData.length)}><span><small>Weekly income</small><b>{money(pieIncome)}</b><small>{pieTotal > pieIncome ? "Allocation exceeds income" : "Select a slice"}</small></span></button><p className="chart-interaction-hint">Select the chart or a legend item to inspect each category.</p></div>
+        <div className="allocation-legend">{pieData.map((item,index) => { const pct = pieIncome > 0 ? item.amount / pieIncome * 100 : 0; return <button type="button" key={item.name} className={"allocation-legend-item " + (selectedPieSlice === index ? "active" : "")} onClick={() => setSelectedPieSlice(index)}><span className="allocation-legend-dot" style={{background:item.color}} /><span className="allocation-legend-copy"><b>{item.name}</b><small>{money(item.amount)} · {pct.toFixed(1)}% of income</small></span><strong>{pct.toFixed(1)}%</strong></button>; })}</div>
+        <div className="allocation-summary"><span>Selected category</span><b>{pieData[selectedPieSlice].name}</b><strong>{money(pieData[selectedPieSlice].amount)}</strong><small>{(pieIncome > 0 ? pieData[selectedPieSlice].amount / pieIncome * 100 : 0).toFixed(1)}% of weekly income</small></div>
+      </div>}
+      {pieIncome > 0 && <div className={"unallocated-summary " + (unallocated < 0 ? "negative" : "")}><div><b>{unallocated < 0 ? "Allocation above income" : "Unallocated income"}</b><small>{unallocated < 0 ? "Needs, wants, and savings are greater than income for this week." : "Income not represented by the three chart categories; it is not assigned to another slice."}</small></div><strong>{money(Math.abs(unallocated))}{unallocated < 0 ? " over" : ""}</strong></div>}
+    </section>
+    <div className="dashboard-grid lower-grid">
+      <section className="panel category-overview"><div className="section-head"><div><span className="overline">WEEKLY SPENDING</span><h2>Spending by category</h2><p>{prettyDate(weekRange.start)} – {prettyDate(weekRange.end)}</p></div></div>
+        {topCategories.length ? <div className="category-breakdown">{topCategories.map(([name, amount], i) => <button type="button" className="breakdown-row interactive-breakdown" key={name} onClick={() => setPage("Transactions")}><div className="breakdown-label"><span className={"breakdown-dot dot-" + i} /><span>{name}</span><b>{money(amount)}</b></div><div className="progress-track"><span className={"breakdown-bar bar-" + i} style={{ width: (amount / Math.max(topExpenseTotal, 1) * 100) + "%" }} /></div><small>{(amount / Math.max(topExpenseTotal,1) * 100).toFixed(1)}% of weekly expenses</small></button>)}</div> : <EmptyState icon={BarChart3} title="No spending breakdown" description="Categorized expenses from this week will appear here." />}
+      </section>
+      <section className="panel category-overview"><div className="section-head"><div><span className="overline">SAVINGS PROGRESS</span><h2>Goal progress chart</h2><p>Saved amounts compared with each target.</p></div><button className="text-link" onClick={() => setPage("Savings Goals")}>Manage <ChevronRight size={15} /></button></div>
+        {goals.length ? <div className="savings-progress-chart">{goals.map((goal) => { const pct = goal.target_amount_centavos > 0 ? goal.current_amount_centavos / goal.target_amount_centavos * 100 : 0; return <button type="button" className="savings-progress-row" key={goal.id} onClick={() => setPage("Savings Goals")}><div><span>{goal.name}</span><b>{Math.min(100,Math.round(pct))}%</b></div><div className="progress-track"><span style={{width:Math.min(100,Math.max(0,pct))+"%"}} /></div><small>{money(goal.current_amount_centavos)} saved of {money(goal.target_amount_centavos)}</small></button>; })}</div> : <EmptyState icon={Goal} title="No savings goals" description="Create a goal to visualize your progress." />}
+      </section>
+    </div>
     <div className="dashboard-grid lower-grid"><section className="panel recent-panel"><div className="section-head"><div><span className="overline">LATEST ACTIVITY</span><h2>Recent transactions</h2><p>Your latest saved money movements.</p></div><button className="text-link" onClick={() => setPage("Transactions")}>View all <ChevronRight size={15} /></button></div>
-      {transactions.length ? <div className="recent-list">{transactions.slice(0, 5).map((tx) => <div className="recent-row" key={tx.id}><span className={"tx-icon " + tx.transaction_type}>{tx.transaction_type === "income" ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span><div className="recent-desc"><b>{tx.description || (tx.transaction_type === "income" ? "Income" : "Expense")}</b><small>{tx.category_name || "Uncategorized"} · {prettyDate(tx.transaction_date)}</small></div><b className={"recent-amount " + tx.transaction_type}>{tx.transaction_type === "expense" || tx.transaction_type === "savings_contribution" ? "−" : "+"}{money(tx.amount_centavos)}</b></div>)}</div> : <EmptyState icon={ArrowLeftRight} title="Nothing to show yet" description="Your saved transactions will appear here." />}
-    </section><section className="panel category-overview"><div className="section-head"><div><span className="overline">SPENDING BREAKDOWN</span><h2>Expense categories</h2><p>For this calendar month.</p></div></div>
-      {topCategories.length ? <div className="category-breakdown">{topCategories.map(([name, amount], i) => { const total = topCategories.reduce((s, x) => s + x[1], 0); return <div className="breakdown-row" key={name}><div className="breakdown-label"><span className={"breakdown-dot dot-" + i} /><span>{name}</span><b>{money(amount)}</b></div><div className="progress-track"><span className={"breakdown-bar bar-" + i} style={{ width: (amount / Math.max(total, 1) * 100) + "%" }} /></div></div>; })}</div> : <EmptyState icon={BarChart3} title="No spending breakdown" description="Categorize expenses to see where your money goes." />}
+      {transactions.length ? <div className="recent-list">{transactions.slice(0, 5).map((tx) => <div className="recent-row" key={tx.id}><span className={"tx-icon " + tx.transaction_type}>{tx.transaction_type === "income" ? <ArrowDownLeft size={16} /> : tx.transaction_type === "savings_contribution" ? <Goal size={16} /> : <ArrowUpRight size={16} />}</span><div className="recent-desc"><b>{tx.description || (tx.transaction_type === "income" ? "Income" : "Expense")}</b><small>{tx.category_name || "Uncategorized"} · {prettyDate(tx.transaction_date)}</small></div><b className={"recent-amount " + tx.transaction_type}>{tx.transaction_type === "expense" || tx.transaction_type === "savings_contribution" ? "−" : "+"}{money(tx.amount_centavos)}</b></div>)}</div> : <EmptyState icon={ArrowLeftRight} title="Nothing to show yet" description="Your saved transactions will appear here." />}
+    </section><section className="panel account-overview-panel"><div className="section-head"><div><span className="overline">YOUR ACCOUNTS</span><h2>Money accounts</h2><p>Available account balances.</p></div><button className="text-link" onClick={() => setPage("Settings")}>Manage <ChevronRight size={15} /></button></div>
+      {accounts.length ? <div className="account-list">{accounts.map((a) => <div className="account-row" key={a.id}><span className="account-icon"><Wallet size={16} /></span><span>{a.name}</span><b>{money(a.balance_centavos ?? a.opening_balance_centavos)}</b></div>)}</div> : <EmptyState icon={Wallet} title="No accounts yet" description="Add a money account to get started." />}
     </section></div>
     {accounts.length === 0 && <div className="getting-started"><div className="getting-icon"><Wallet size={20} /></div><div><b>First, add a money account</b><p>Set up a cash, bank, or e-wallet account before recording transactions.</p></div><button className="btn btn-primary btn-small" onClick={() => setPage("Settings")}>Set up account <ChevronRight size={15} /></button></div>}
   </>;
 }
+
 function MetricCard({ title, value, icon: Icon, tone, caption }: { title: string; value: string; icon: typeof Wallet; tone: string; caption: string }) {
   return <article className="metric-card"><div className="metric-top"><span>{title}</span><span className={"metric-icon " + tone}><Icon size={18} /></span></div><div className="metric-value">{value}</div><div className="metric-caption"><span className={"caption-dot " + tone} />{caption}</div></article>;
 }
