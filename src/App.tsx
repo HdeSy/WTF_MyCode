@@ -1,4 +1,5 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import ExcelJS from "exceljs";
 import {
   ArrowDownLeft, ArrowDownRight, ArrowLeftRight, ArrowUpRight, BadgeCheck,
@@ -27,7 +28,6 @@ const navItems: { label: Page; icon: typeof LayoutDashboard; description: string
   { label: "Settings", icon: Settings, description: "Accounts and preferences" },
 ];
 const money = (centavos: number) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(centavos / 100);
-const peso = (amount: number) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 function manilaToday() {
   const p = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const get = (type: string) => p.find((x) => x.type === type)?.value ?? "";
