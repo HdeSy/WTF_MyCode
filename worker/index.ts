@@ -225,7 +225,7 @@ export default {
         const group = body?.budgetGroup;
         if (!name || name.length > 60) return fail("Enter a category name of 1–60 characters.");
         if (kind !== "income" && kind !== "expense") return fail("Choose income or expense for the category.");
-        if (!["needs","wants","savings","income"].includes(group) || (kind === "income" && group !== "income") || (kind === "expense" && group === "income")) return fail("Choose a category group matching its type.");
+        if (typeof group !== "string" || !["needs","wants","savings","income"].includes(group) || (kind === "income" && group !== "income") || (kind === "expense" && group === "income")) return fail("Choose a category group matching its type.");
         const result = await db.prepare("UPDATE categories SET name=?,kind=?,budget_group=? WHERE id=? AND user_id=?").bind(name,kind,group,categoryMatch[1],userId).run();
         if (!result.meta.changes) return fail("Category not found.",404);
         return json({ok:true});
