@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { getPeriodRange, shiftPeriod, summarizeTransactions } from "./lib/finance";
+import type { PeriodKind } from "./lib/finance";
 import ExcelJS from "exceljs";
 import {
   ArrowDownLeft, ArrowDownRight, ArrowLeftRight, ArrowUpRight, BadgeCheck,
@@ -13,10 +15,10 @@ type Page = "Dashboard" | "Transactions" | "Budgets" | "Savings Goals" | "Report
 type User = { id: string; name: string; email: string };
 type Account = { id: string; name: string; account_type: string; opening_balance_centavos: number; balance_centavos?: number };
 type Category = { id: string; name: string; kind: "income" | "expense"; color?: string | null };
-type Transaction = { id: string; account_id: string; category_id: string | null; transaction_type: "income" | "expense" | "transfer"; amount_centavos: number; transaction_date: string; description: string | null; account_name?: string; category_name?: string | null };
+type Transaction = { id: string; account_id: string; category_id: string | null; transaction_type: "income" | "expense" | "savings_contribution" | "transfer"; amount_centavos: number; transaction_date: string; description: string; payment_method: "cash" | "bank_transfer" | "e_wallet" | "credit_card" | "other"; notes: string | null; account_name?: string; category_name?: string | null };
 type Budget = { id: string; category_id: string; category_name: string; period_start: string; period_end: string; amount_centavos: number; spent_centavos: number };
 type Goal = { id: string; name: string; target_amount_centavos: number; target_date: string | null; current_amount_centavos: number; status: "active" | "completed" | "paused" };
-type Dashboard = { period: { start: string; end: string; timezone: string }; totals: { income: number; expenses: number; savings: number; remainingBalance: number; goalSavings: number }; recentTransactions: Transaction[] };
+type Dashboard = { period: { start: string; end: string; timezone: string }; totals: { income: number; expenses: number; savings: number; savingsContributions: number; remainingBalance: number; goalSavings: number }; recentTransactions: Transaction[] };
 type ApiResult<T> = { data: T; error?: string };
 
 const navItems: { label: Page; icon: typeof LayoutDashboard; description: string }[] = [
@@ -77,7 +79,15 @@ export default function App() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [search, setSearch] = useState("");
   const [transactionFilter, setTransactionFilter] = useState("all");
-  const [transactionForm, setTransactionForm] = useState({ type: "expense", amount: "", date: manilaToday(), accountId: "", categoryId: "", description: "" });
+  const [transactionForm, setTransactionForm] = useState({ type: "expense", amount: "", date: manilaToday(), accountId: "", categoryId: "", description: "", paymentMethod: "cash", notes: "" });
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [viewTransaction, setViewTransaction] = useState<Transaction | null>(null);
+  const [transactionPeriod, setTransactionPeriod] = useState<PeriodKind>("Monthly");
+  const [periodAnchor, setPeriodAnchor] = useState(manilaToday());
+  const [customStart, setCustomStart] = useState(manilaMonthStart());
+  const [customEnd, setCustomEnd] = useState(manilaToday());
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState("all");
   const [budgetForm, setBudgetForm] = useState({ categoryId: "", amount: "", periodStart: manilaMonthStart(), periodEnd: manilaToday() });
   const [goalForm, setGoalForm] = useState({ name: "", targetAmount: "", targetDate: "" });
   const [goalUpdates, setGoalUpdates] = useState<Record<string, string>>({});
