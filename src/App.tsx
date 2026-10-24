@@ -153,7 +153,7 @@ export default function App() {
     setSaving(true);
     try { await api("/api/auth/sign-out", { method: "POST", body: JSON.stringify({}) }); }
     catch { /* local state is cleared even if the server session already expired */ }
-    setUser(null); setDashboard(null); setTransactions([]); setAccounts([]); setCategories([]); setBudgets([]); setGoals([]);
+    setUser(null); setTransactions([]); setAccounts([]); setCategories([]); setBudgets([]); setGoals([]);
     setPage("Dashboard"); setSuccess(""); setError(""); setSaving(false);
   };
 
