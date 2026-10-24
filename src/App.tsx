@@ -88,8 +88,9 @@ export default function App() {
     setLoading(true);
     setError("");
     try {
-      const [me, dash, tx, acc, cats, buds, savings] = await Promise.all([
-        api<{ user: User }>("/api/me"),
+      const me = await api<{ user: User }>("/api/me");
+      setUser(me.user);
+      const [dash, tx, acc, cats, buds, savings] = await Promise.all([
         api<Dashboard>("/api/dashboard"),
         api<ApiResult<Transaction[]>>("/api/transactions"),
         api<ApiResult<Account[]>>("/api/accounts"),
@@ -97,7 +98,6 @@ export default function App() {
         api<ApiResult<Budget[]>>("/api/budgets"),
         api<ApiResult<Goal[]>>("/api/savings-goals"),
       ]);
-      setUser(me.user);
       setDashboard(dash);
       setTransactions(tx.data);
       setAccounts(acc.data);
