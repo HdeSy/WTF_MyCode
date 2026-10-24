@@ -20,10 +20,21 @@ type TxRow = {
   account_name?: string; category_name?: string | null;
 };
 
-const json = (body: unknown, status = 200) => Response.json(body, {
+function withSecurityHeaders(response: Response, request?: Request) {
+  const headers = new Headers(response.headers);
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (request && new URL(request.url).protocol === "https:") {
+    headers.set("Strict-Transport-Security", "max-age=31536000");
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+const json = (body: unknown, status = 200) => withSecurityHeaders(Response.json(body, {
   status,
-  headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
-});
+  headers: { "Cache-Control": "no-store" },
+}));
 const fail = (message: string, status = 400) => json({ error: message }, status);
 const id = () => crypto.randomUUID();
 
@@ -93,10 +104,20 @@ export default {
           },
         },
       });
-      return auth.handler(request);
+      return withSecurityHeaders(await auth.handler(request), request);
     }
 
-    if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    if (!url.pathname.startsWith("/api/")) {
+      try {
+        return withSecurityHeaders(await env.ASSETS.fetch(request), request);
+      } catch (error) {
+        console.error("Budgetwise asset request failed", { errorType: error instanceof Error ? error.name : "UnknownError" });
+        return withSecurityHeaders(new Response(
+          "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Budgetwise temporarily unavailable</title><body><main><h1>Budgetwise is temporarily unavailable</h1><p>Please try again in a moment.</p></main></body></html>",
+          { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
+        ), request);
+      }
+    }
     if (!env.BETTER_AUTH_SECRET) return fail("Authentication is not configured.", 503);
 
     const isMutation = !["GET", "HEAD", "OPTIONS"].includes(request.method);
@@ -423,7 +444,7 @@ export default {
 
       return fail("API endpoint not found.", 404);
     } catch (error) {
-      console.error("Budgetwise API error", error instanceof Error ? error.message : "Unknown error");
+      console.error("Budgetwise API request failed", { errorType: error instanceof Error ? error.name : "UnknownError" });
       return fail("The request could not be completed. Please try again.", 500);
     }
   },
