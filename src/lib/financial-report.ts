@@ -132,7 +132,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
   summary.getColumn(4).width = 20;
   const reportCategoryRows = input.categories.filter((category) => category.kind === "income" || ["needs", "wants", "savings"].includes(category.budget_group)).map((category) => ({ id: category.id, name: category.name, budget_group: category.budget_group }));
   const hasUncategorized = transactions.some((tx) => tx.transaction_type !== "transfer" && (!tx.category_id || !categoryById.has(tx.category_id)));
-  if (hasUncategorized) reportCategoryRows.push({ id: "__uncategorized__", name: "Uncategorized", budget_group: "income" === "none" ? "income" : "savings" });
+  if (hasUncategorized) reportCategoryRows.push({ id: "__uncategorized__", name: "Uncategorized", budget_group: "savings" });
   reportCategoryRows.forEach((category, index) => {
     const row = 18 + index;
     const unallocatedRow = category.id === "__uncategorized__";
@@ -171,7 +171,7 @@ export function buildFinancialWorkbook(input: FinancialReportInput): ExcelJS.Wor
     payment: tx.payment_method.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
     amount: tx.amount_centavos / 100,
     notes: tx.notes || "",
-    group: categoryFor(tx)?.budget_group[0].toUpperCase() + (categoryFor(tx)?.budget_group.slice(1) ?? "") || "Unallocated",
+    group: categoryFor(tx) ? categoryFor(tx)!.budget_group[0].toUpperCase() + categoryFor(tx)!.budget_group.slice(1) : "Unallocated",
   })));
   txSheet.getColumn("amount").numFmt = pesosFormat;
   txSheet.getColumn("date").numFmt = dateFormat;
