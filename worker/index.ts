@@ -143,7 +143,7 @@ export default {
         `).bind(userId, start, today).first<{ income: number; expenses: number; savings_contributions: number }>();
         const goals = await db.prepare("SELECT COALESCE(SUM(current_amount_centavos),0) AS saved FROM savings_goals WHERE user_id=? AND status != 'paused'").bind(userId).first<{ saved: number }>();
         const recent = await db.prepare(`
-          SELECT t.id,t.account_id,t.category_id,t.transaction_type,t.amount_centavos,t.transaction_date,t.description,t.payment_method,t.notes,
+          SELECT t.id,t.account_id,t.category_id,t.goal_id,t.transaction_type,t.amount_centavos,t.transaction_date,t.description,t.payment_method,t.notes,
                  a.name AS account_name,c.name AS category_name
           FROM transactions t JOIN accounts a ON a.id=t.account_id AND a.user_id=t.user_id
           LEFT JOIN categories c ON c.id=t.category_id AND c.user_id=t.user_id
@@ -188,7 +188,7 @@ export default {
       }
 
       if (url.pathname === "/api/categories" && request.method === "GET") {
-        const rows = await db.prepare("SELECT id,name,kind,color FROM categories WHERE user_id=? ORDER BY kind,name").bind(userId).all();
+        const rows = await db.prepare("SELECT id,name,kind,color,budget_group FROM categories WHERE user_id=? ORDER BY budget_group,kind,name").bind(userId).all();
         return json({ data: rows.results ?? [] });
       }
 
@@ -196,13 +196,37 @@ export default {
         const body = await readJson(request);
         const name = typeof body?.name === "string" ? body.name.trim() : "";
         const kind = body?.kind;
+        const group = body?.budgetGroup;
         if (!name || name.length > 60) return fail("Enter a category name of 1–60 characters.");
         if (kind !== "income" && kind !== "expense") return fail("Choose income or expense for the category.");
+        if (!["needs","wants","savings","income"].includes(group) || (kind === "income" && group !== "income") || (kind === "expense" && group === "income")) return fail("Choose a category group matching its type.");
         const categoryId = id();
         try {
-          await db.prepare("INSERT INTO categories (id,user_id,name,kind) VALUES (?,?,?,?)").bind(categoryId,userId,name,kind).run();
+          await db.prepare("INSERT INTO categories (id,user_id,name,kind,budget_group) VALUES (?,?,?,?,?)").bind(categoryId,userId,name,kind,group).run();
         } catch { return fail("That category already exists for this type.", 409); }
-        return json({ data: { id: categoryId, name, kind } }, 201);
+        return json({ data: { id: categoryId, name, kind, budget_group: group } }, 201);
+      }
+
+      const categoryMatch = url.pathname.match(/^\/api\/categories\/([a-f0-9-]+)$/i);
+      if (categoryMatch && request.method === "PATCH") {
+        const body = await readJson(request);
+        const name = typeof body?.name === "string" ? body.name.trim() : "";
+        const kind = body?.kind;
+        const group = body?.budgetGroup;
+        if (!name || name.length > 60) return fail("Enter a category name of 1–60 characters.");
+        if (kind !== "income" && kind !== "expense") return fail("Choose income or expense for the category.");
+        if (!["needs","wants","savings","income"].includes(group) || (kind === "income" && group !== "income") || (kind === "expense" && group === "income")) return fail("Choose a category group matching its type.");
+        const result = await db.prepare("UPDATE categories SET name=?,kind=?,budget_group=? WHERE id=? AND user_id=?").bind(name,kind,group,categoryMatch[1],userId).run();
+        if (!result.meta.changes) return fail("Category not found.",404);
+        return json({ok:true});
+      }
+      if (categoryMatch && request.method === "DELETE") {
+        const used = await db.prepare("SELECT id FROM transactions WHERE category_id=? AND user_id=? LIMIT 1").bind(categoryMatch[1],userId).first();
+        const budgeted = await db.prepare("SELECT id FROM budgets WHERE category_id=? AND user_id=? LIMIT 1").bind(categoryMatch[1],userId).first();
+        if (used || budgeted) return fail("This category is used by transactions or budgets. Edit its name/group instead, or remove those records first.",409);
+        const result = await db.prepare("DELETE FROM categories WHERE id=? AND user_id=?").bind(categoryMatch[1],userId).run();
+        if (!result.meta.changes) return fail("Category not found.",404);
+        return json({ok:true});
       }
 
       if (url.pathname === "/api/transactions" && request.method === "GET") {
@@ -241,7 +265,10 @@ export default {
         const description = typeof body?.description === "string" ? body.description.trim() : "";
         const paymentMethod = body?.paymentMethod;
         const notes = typeof body?.notes === "string" ? body.notes.trim() : "";
+        const goalId = typeof body?.goalId === "string" && body.goalId ? body.goalId : null;
         if (kind !== "income" && kind !== "expense" && kind !== "savings_contribution") return fail("Choose income, expense, or savings contribution.");
+        if (kind !== "savings_contribution" && goalId) return fail("Only savings contributions can be linked to a goal.");
+        if (goalId && !await db.prepare("SELECT id FROM savings_goals WHERE id=? AND user_id=?").bind(goalId,userId).first()) return fail("Choose one of your own savings goals.",403);
         if (cents === null) return fail("Enter an amount greater than ₱0.00 and no more than ₱1,000,000,000.00.");
         if (!validDate(date)) return fail("Choose a valid transaction date.");
         if (date > todayInManila()) return fail("Transaction date cannot be in the future (Asia/Manila).");
@@ -254,9 +281,9 @@ export default {
         const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=?").bind(categoryId,userId,categoryKind).first();
         if (!category) return fail("Choose a category belonging to your account and transaction type.", 403);
         const transactionId = id();
-        await db.prepare("INSERT INTO transactions (id,user_id,account_id,category_id,transaction_type,amount_centavos,transaction_date,description,payment_method,notes) VALUES (?,?,?,?,?,?,?,?,?,?)")
-          .bind(transactionId,userId,accountId,categoryId,kind,cents,date,description,paymentMethod,notes || null).run();
-        return json({ data: { id: transactionId, account_id: accountId, category_id: categoryId, transaction_type: kind, amount_centavos: cents, transaction_date: date, description, payment_method: paymentMethod, notes: notes || null } }, 201);
+        await db.prepare("INSERT INTO transactions (id,user_id,account_id,category_id,goal_id,transaction_type,amount_centavos,transaction_date,description,payment_method,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(transactionId,userId,accountId,categoryId,goalId,kind,cents,date,description,paymentMethod,notes || null).run();
+        return json({ data: { id: transactionId, account_id: accountId, category_id: categoryId, goal_id: goalId, transaction_type: kind, amount_centavos: cents, transaction_date: date, description, payment_method: paymentMethod, notes: notes || null } }, 201);
       }
 
       const transactionMatch = url.pathname.match(/^\/api\/transactions\/([a-f0-9-]+)$/i);
@@ -282,8 +309,8 @@ export default {
         const categoryKind = kind === "savings_contribution" ? "expense" : kind;
         const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=?").bind(categoryId,userId,categoryKind).first();
         if (!category) return fail("Choose a category belonging to your account and transaction type.", 403);
-        const result = await db.prepare("UPDATE transactions SET account_id=?,category_id=?,transaction_type=?,amount_centavos=?,transaction_date=?,description=?,payment_method=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?")
-          .bind(accountId,categoryId,kind,cents,date,description,paymentMethod,notes || null,transactionMatch[1],userId).run();
+        const result = await db.prepare("UPDATE transactions SET account_id=?,category_id=?,goal_id=?,transaction_type=?,amount_centavos=?,transaction_date=?,description=?,payment_method=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?")
+          .bind(accountId,categoryId,goalId,kind,cents,date,description,paymentMethod,notes || null,transactionMatch[1],userId).run();
         if (!result.meta.changes) return fail("Transaction not found.", 404);
         return json({ ok: true });
       }
