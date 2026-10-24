@@ -79,6 +79,7 @@ describe("Excel financial report workbook", () => {
     assert.equal(txSheet.views[0].state, "frozen");
     assert.equal(txSheet.views[0].ySplit, 1);
     assert.ok(txSheet.autoFilter);
+    assert.equal(txSheet.getColumn(9).hidden, true);
     assert.equal(txSheet.getCell("A2").numFmt, "yyyy-mm-dd");
     assert.equal(txSheet.getCell("F3").numFmt, '"₱"#,##0.00;[Red]-"₱"#,##0.00');
     const summary = workbook.getWorksheet("Financial Summary")!;
@@ -89,10 +90,12 @@ describe("Excel financial report workbook", () => {
     assert.equal((summary.getCell("B10").value as { result: number }).result, 200);
     assert.equal((summary.getCell("B11").value as { result: number }).result, 50);
     assert.match((summary.getCell("B9").value as { formula: string }).formula, /B6-B7-B8/);
+    assert.match((summary.getCell("C19").value as { formula: string }).formula, /Transactions!\\$I:\\$I/);
     const budget = workbook.getWorksheet("Budget Analysis")!;
     assert.equal(budget.getCell("C6").value && (budget.getCell("C6").value as { result: number }).result, 200);
     assert.equal((budget.getCell("D6").value as { result: number }).result, 100);
     assert.equal((budget.getCell("F6").value as { result: string }).result, "Within Budget");
+    assert.match((budget.getCell("C6").value as { formula: string }).formula, /Transactions!\\$I:\\$I/);
     const goal = workbook.getWorksheet("Savings Goals")!;
     assert.equal((goal.getCell("D6").value as { result: number }).result, 250);
     assert.equal((goal.getCell("F6").value as { result: number }).result, 0.5);
