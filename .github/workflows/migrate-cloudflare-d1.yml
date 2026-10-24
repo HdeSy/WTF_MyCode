@@ -60,7 +60,7 @@ jobs:
             echo "::error::Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID repository secret."
             exit 1
           fi
-          CONFIGURED_ID="$(node -e "const fs=require('fs'); const s=fs.readFileSync('wrangler.jsonc','utf8'); const m=s.match(/\\"database_id\\"\\s*:\\s*\\"([^\\"]+)\\"/); if(!m) process.exit(2); process.stdout.write(m[1]);")"
+          CONFIGURED_ID="$(node -e "const c=JSON.parse(require('fs').readFileSync('wrangler.jsonc','utf8')); process.stdout.write(c.d1_databases[0].database_id);")"
           if [[ "$CONFIRMED_DATABASE_ID" != "$CONFIGURED_ID" ]]; then
             echo "::error::The entered database ID does not match wrangler.jsonc. No migrations were applied."
             exit 1
