@@ -4,7 +4,8 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-10-24",
   "assets": {
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
   },
   "d1_databases": [
     {
@@ -13,5 +14,8 @@
       "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
       "migrations_dir": "migrations"
     }
+  ],
+  "compatibility_flags": [
+    "nodejs_compat"
   ]
 }
