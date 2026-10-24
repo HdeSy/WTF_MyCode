@@ -248,7 +248,7 @@ export default function App() {
 
   const activeTransactionRange = useMemo(() => transactionPeriod === "Custom"
     ? { start: customStart, end: customEnd }
-    : getPeriodRange(periodAnchor, transactionPeriod), [transactionPeriod, periodAnchor, customStart, customEnd]);
+    : getPeriodRange(periodAnchor || manilaToday(), transactionPeriod), [transactionPeriod, periodAnchor, customStart, customEnd]);
   const transactionSummary = useMemo(() => summarizeTransactions(transactions, activeTransactionRange), [transactions, activeTransactionRange]);
   const visibleTransactions = useMemo(() => transactions.filter((tx) => {
     const text = [tx.description, tx.category_name, tx.account_name, tx.transaction_date, tx.transaction_type, tx.payment_method, tx.notes].join(" ").toLowerCase();
@@ -378,7 +378,7 @@ export default function App() {
                 <div className="section-head"><div><span className="overline">PERIOD SUMMARY</span><h2>Your money movement</h2><p>All dates are calendar dates in Asia/Manila.</p></div></div>
                 <div className="period-toolbar">
                   <div className="segmented period-segmented">{(["Daily", "Weekly", "Monthly", "Custom"] as PeriodKind[]).map((period) => <button key={period} type="button" className={transactionPeriod === period ? "selected income-selected" : ""} onClick={() => setTransactionPeriod(period)}>{period}</button>)}</div>
-                  {transactionPeriod === "Custom" ? <div className="period-date-controls"><label>From<input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} /></label><label>To<input type="date" value={customEnd} min={customStart} onChange={(e) => setCustomEnd(e.target.value)} /></label></div> : <div className="period-date-controls"><button className="btn btn-secondary btn-small" type="button" onClick={() => setPeriodAnchor(shiftPeriod(periodAnchor, transactionPeriod, -1))}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }} /> Previous</button><label>Anchor date<input type="date" value={periodAnchor} onChange={(e) => setPeriodAnchor(e.target.value)} /></label><button className="btn btn-secondary btn-small" type="button" onClick={() => setPeriodAnchor(shiftPeriod(periodAnchor, transactionPeriod, 1))}>Next <ChevronRight size={14} /></button></div>}
+                  {transactionPeriod === "Custom" ? <div className="period-date-controls"><label>From<input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} /></label><label>To<input type="date" value={customEnd} min={customStart} onChange={(e) => setCustomEnd(e.target.value)} /></label></div> : <div className="period-date-controls"><button className="btn btn-secondary btn-small" type="button" onClick={() => setPeriodAnchor(shiftPeriod(periodAnchor || manilaToday(), transactionPeriod, -1))}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }} /> Previous</button><label>Anchor date<input type="date" value={periodAnchor} onChange={(e) => setPeriodAnchor(e.target.value)} /></label><button className="btn btn-secondary btn-small" type="button" onClick={() => setPeriodAnchor(shiftPeriod(periodAnchor || manilaToday(), transactionPeriod, 1))}>Next <ChevronRight size={14} /></button></div>}
                 </div>
                 <p className="active-range-label">Showing {prettyDate(activeTransactionRange.start)} – {prettyDate(activeTransactionRange.end)}</p>
                 <div className="summary-grid transaction-summary-grid">
