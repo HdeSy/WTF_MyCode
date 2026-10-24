@@ -165,23 +165,27 @@ export default function App() {
     event.preventDefault(); setError(""); setSuccess("");
     const amount = Number(transactionForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000) { setError("Enter an amount greater than ₱0.00 and no more than ₱1,000,000,000.00."); return; }
-    if (!transactionForm.accountId) { setError("Create an account in Settings before adding transactions."); return; }
-    if (!transactionForm.date) { setError("Choose a transaction date."); return; }
+    if (!transactionForm.accountId) { setError("Create or select an account in Settings."); return; }
+    if (!transactionForm.date || transactionForm.date > manilaToday()) { setError("Choose a valid transaction date no later than today (Asia/Manila)."); return; }
+    if (!transactionForm.description.trim()) { setError("Description is required."); return; }
+    if (!transactionForm.categoryId) { setError("Choose a category."); return; }
+    if (!transactionForm.paymentMethod) { setError("Choose a payment method."); return; }
     setSaving(true);
     try {
-      await api("/api/transactions", { method: "POST", body: JSON.stringify({ type: transactionForm.type, amount, date: transactionForm.date, accountId: transactionForm.accountId, categoryId: transactionForm.categoryId || null, description: transactionForm.description.trim() }) });
-      setTransactionForm((old) => ({ ...old, amount: "", description: "", categoryId: "" }));
-      await refreshAll(); setPage("Transactions"); flash("Transaction saved to your private account.");
+      const payload = { type: transactionForm.type, amount, date: transactionForm.date, accountId: transactionForm.accountId, categoryId: transactionForm.categoryId, description: transactionForm.description.trim(), paymentMethod: transactionForm.paymentMethod, notes: transactionForm.notes.trim() };
+      const wasEditing = Boolean(editingTransactionId);
+      await api(editingTransactionId ? "/api/transactions/" + editingTransactionId : "/api/transactions", { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
+      setTransactionForm((old) => ({ ...old, amount: "", description: "", categoryId: "", notes: "" }));
+      setEditingTransactionId(null);
+      await refreshAll(); setPage("Transactions"); flash(wasEditing ? "Transaction updated." : "Transaction saved to your private account.");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save transaction."); }
     finally { setSaving(false); }
   };
 
-  const deleteTransaction = async (transactionId: string) => {
-    if (!window.confirm("Delete this transaction? This cannot be undone.")) return;
-    setSaving(true); setError(""); setSuccess("");
-    try { await api("/api/transactions/" + transactionId, { method: "DELETE" }); await refreshAll(); flash("Transaction deleted."); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not delete transaction."); }
-    finally { setSaving(false); }
+  const startEditTransaction = (tx: Transaction) => {
+    setEditingTransactionId(tx.id);
+    setTransactionForm({ type: tx.transaction_type, amount: (tx.amount_centavos / 100).toFixed(2), date: tx.transaction_date, accountId: tx.account_id, categoryId: tx.category_id || "", description: tx.description || "", paymentMethod: tx.payment_method || "cash", notes: tx.notes || "" });
+    document.getElementById("transaction-entry")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const submitBudget = async (event: FormEvent) => {
@@ -237,10 +241,17 @@ export default function App() {
     finally { setSaving(false); }
   };
 
+  const activeTransactionRange = useMemo(() => transactionPeriod === "Custom"
+    ? { start: customStart, end: customEnd }
+    : getPeriodRange(periodAnchor, transactionPeriod), [transactionPeriod, periodAnchor, customStart, customEnd]);
+  const transactionSummary = useMemo(() => summarizeTransactions(transactions, activeTransactionRange), [transactions, activeTransactionRange]);
   const visibleTransactions = useMemo(() => transactions.filter((tx) => {
-    const text = [tx.description, tx.category_name, tx.account_name, tx.transaction_date, tx.transaction_type].join(" ").toLowerCase();
-    return text.includes(search.toLowerCase()) && (transactionFilter === "all" || tx.transaction_type === transactionFilter);
-  }), [transactions, search, transactionFilter]);
+    const text = [tx.description, tx.category_name, tx.account_name, tx.transaction_date, tx.transaction_type, tx.payment_method, tx.notes].join(" ").toLowerCase();
+    return text.includes(search.toLowerCase()) && tx.transaction_date >= activeTransactionRange.start && tx.transaction_date <= activeTransactionRange.end
+      && (transactionFilter === "all" || tx.transaction_type === transactionFilter)
+      && (filterCategory === "all" || tx.category_id === filterCategory)
+      && (filterPaymentMethod === "all" || tx.payment_method === filterPaymentMethod);
+  }), [transactions, search, transactionFilter, filterCategory, filterPaymentMethod, activeTransactionRange]);
 
   const exportExcel = async () => {
     setSaving(true); setError(""); setSuccess("");
