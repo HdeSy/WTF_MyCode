@@ -288,10 +288,11 @@ export default {
         const body = await readJson(request);
         const name = typeof body?.name === "string" ? body.name.trim() : "";
         const target = amountCentavos(body?.targetAmount);
-        const targetDate = body?.targetDate || null;
+        const rawTargetDate = body?.targetDate;
         if (!name || name.length > 80) return fail("Enter a savings goal name of 1–80 characters.");
         if (target === null) return fail("Target amount must be greater than ₱0.00.");
-        if (targetDate !== null && !validDate(targetDate)) return fail("Choose a valid target date.");
+        if (rawTargetDate !== undefined && rawTargetDate !== null && rawTargetDate !== "" && !validDate(rawTargetDate)) return fail("Choose a valid target date.");
+        const targetDate = typeof rawTargetDate === "string" && rawTargetDate ? rawTargetDate : null;
         const goalId = id();
         await db.prepare("INSERT INTO savings_goals (id,user_id,name,target_amount_centavos,target_date) VALUES (?,?,?,?,?)").bind(goalId,userId,name,target,targetDate).run();
         return json({ data: { id: goalId, name, target_amount_centavos: target, target_date: targetDate, current_amount_centavos: 0, status: "active" } }, 201);
