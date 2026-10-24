@@ -172,7 +172,7 @@ export default function App() {
       const payload = { type: transactionForm.type, amount, date: transactionForm.date, accountId: transactionForm.accountId, categoryId: transactionForm.categoryId, description: transactionForm.description.trim(), paymentMethod: transactionForm.paymentMethod, notes: transactionForm.notes.trim(), goalId: transactionForm.type === "savings_contribution" ? transactionForm.goalId || null : null };
       const wasEditing = Boolean(editingTransactionId);
       await api(editingTransactionId ? "/api/transactions/" + editingTransactionId : "/api/transactions", { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
-      setTransactionForm((old) => ({ ...old, amount: "", description: "", categoryId: "", notes: "" }));
+      setTransactionForm((old) => ({ ...old, amount: "", description: "", categoryId: "", notes: "", goalId: "" }));
       setEditingTransactionId(null);
       await refreshAll(); setPage("Transactions"); flash(wasEditing ? "Transaction updated." : "Transaction saved to your private account.");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save transaction."); }
@@ -584,7 +584,7 @@ function DashboardPage({ accounts, categories, goals, transactions, setPage }: {
   const pieTotal = pieData.reduce((sum, item) => sum + item.amount, 0);
   const pieIncome = weekTotals.income;
   let cursor = 0;
-  const pieStops = pieData.map((item) => { const start = cursor; cursor += pieIncome > 0 ? item.amount / pieIncome * 100 : 0; return item.color + " " + start + "% " + cursor + "%"; }).join(", ");
+  const pieStops = pieData.map((item) => { const start = cursor; cursor += pieIncome >= pieTotal && pieIncome > 0 ? item.amount / pieIncome * 100 : pieTotal > 0 ? item.amount / pieTotal * 100 : 0; return item.color + " " + start + "% " + cursor + "%"; }).join(", ");
   const unallocated = pieIncome - pieTotal;
   const expenseCategories = weekTransactions.filter((tx) => tx.transaction_type === "expense").reduce<Record<string, number>>((acc, tx) => { const key = tx.category_name || "Uncategorized"; acc[key] = (acc[key] || 0) + tx.amount_centavos; return acc; }, {});
   const topCategories = Object.entries(expenseCategories).sort((a, b) => b[1] - a[1]).slice(0, 6);
