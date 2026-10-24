@@ -200,12 +200,28 @@ export default function App() {
   const submitBudget = async (event: FormEvent) => {
     event.preventDefault(); setError(""); setSuccess("");
     const amount = Number(budgetForm.amount);
-    if (!budgetForm.categoryId) { setError("Create an expense category in Settings first."); return; }
-    if (!Number.isFinite(amount) || amount <= 0) { setError("Enter a budget greater than ₱0.00."); return; }
+    if (!budgetForm.categoryId) { setError("Choose a Needs or Wants category."); return; }
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000) { setError("Enter a budget greater than ₱0.00."); return; }
     if (!budgetForm.periodStart || !budgetForm.periodEnd || budgetForm.periodEnd < budgetForm.periodStart) { setError("The end date must be on or after the start date."); return; }
     setSaving(true);
-    try { await api("/api/budgets", { method: "POST", body: JSON.stringify({ categoryId: budgetForm.categoryId, amount, periodStart: budgetForm.periodStart, periodEnd: budgetForm.periodEnd }) }); setBudgetForm((old) => ({ ...old, amount: "" })); await refreshAll(); flash("Budget saved."); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not save budget."); }
+    try {
+      const payload = { categoryId: budgetForm.categoryId, amount, periodStart: budgetForm.periodStart, periodEnd: budgetForm.periodEnd };
+      await api(editingBudgetId ? "/api/budgets/" + editingBudgetId : "/api/budgets", { method: editingBudgetId ? "PUT" : "POST", body: JSON.stringify(payload) });
+      setBudgetForm((old) => ({ ...old, amount: "" })); setEditingBudgetId(null);
+      await refreshAll(); flash(editingBudgetId ? "Budget updated." : "Budget saved.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not save budget."); }
+    finally { setSaving(false); }
+  };
+  const editBudget = (budget: Budget) => {
+    setEditingBudgetId(budget.id);
+    setBudgetForm({ categoryId: budget.category_id, amount: (budget.amount_centavos / 100).toFixed(2), periodStart: budget.period_start, periodEnd: budget.period_end });
+    document.getElementById("budget-entry")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const deleteBudget = async (budget: Budget) => {
+    if (!window.confirm("Delete this budget for " + budget.category_name + "?")) return;
+    setSaving(true); setError(""); setSuccess("");
+    try { await api("/api/budgets/" + budget.id, { method: "DELETE" }); await refreshAll(); flash("Budget deleted."); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not delete budget."); }
     finally { setSaving(false); }
   };
 
@@ -215,7 +231,7 @@ export default function App() {
     if (!goalForm.name.trim()) { setError("Enter a name for your savings goal."); return; }
     if (!Number.isFinite(targetAmount) || targetAmount <= 0) { setError("Enter a target amount greater than ₱0.00."); return; }
     setSaving(true);
-    try { await api("/api/savings-goals", { method: "POST", body: JSON.stringify({ name: goalForm.name.trim(), targetAmount, targetDate: goalForm.targetDate || null }) }); setGoalForm({ name: "", description: "", targetAmount: "", targetDate: "" }); await refreshAll(); flash("Savings goal created."); }
+    try { await api("/api/savings-goals", { method: "POST", body: JSON.stringify({ name: goalForm.name.trim(), description: goalForm.description.trim(), targetAmount, targetDate: goalForm.targetDate || null }) }); setGoalForm({ name: "", description: "", targetAmount: "", targetDate: "" }); await refreshAll(); flash("Savings goal created."); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not create savings goal."); }
     finally { setSaving(false); }
   };
@@ -245,10 +261,28 @@ export default function App() {
     event.preventDefault(); setError(""); setSuccess("");
     if (!categoryForm.name.trim()) { setError("Enter a category name."); return; }
     setSaving(true);
-    try { await api("/api/categories", { method: "POST", body: JSON.stringify({ name: categoryForm.name.trim(), kind: categoryForm.kind }) }); setCategoryForm((old) => ({ ...old, name: "" })); await refreshAll(); flash("Category saved."); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not create category."); }
+    try {
+      const payload = { name: categoryForm.name.trim(), kind: categoryForm.kind, budgetGroup: categoryForm.kind === "income" ? "income" : categoryForm.budgetGroup };
+      await api(editingCategoryId ? "/api/categories/" + editingCategoryId : "/api/categories", { method: editingCategoryId ? "PATCH" : "POST", body: JSON.stringify(payload) });
+      setCategoryForm({ name: "", kind: "expense", budgetGroup: "needs" }); setEditingCategoryId(null);
+      await refreshAll(); flash(editingCategoryId ? "Category updated." : "Category created.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not save category."); }
     finally { setSaving(false); }
   };
+
+  const editCategory = (category: Category) => {
+    setEditingCategoryId(category.id);
+    setCategoryForm({ name: category.name, kind: category.kind, budgetGroup: category.budget_group });
+    document.getElementById("category-entry")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const deleteCategory = async (category: Category) => {
+    if (!window.confirm("Delete category “" + category.name + "”? Categories used by transactions or budgets cannot be deleted.")) return;
+    setSaving(true); setError(""); setSuccess("");
+    try { await api("/api/categories/" + category.id, { method: "DELETE" }); await refreshAll(); flash("Category deleted."); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not delete category."); }
+    finally { setSaving(false); }
+  };
+
 
   const activeTransactionRange = useMemo(() => transactionPeriod === "Custom"
     ? { start: customStart, end: customEnd }
