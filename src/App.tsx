@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { calculateUnallocatedIncome, getPeriodRange, percentageOfIncome, shiftPeriod, summarizeTransactions } from "./lib/finance";
 import type { PeriodKind } from "./lib/finance";
-import ExcelJS from "exceljs";
+import { buildFinancialWorkbook } from "./lib/financial-report";
 import {
   ArrowDownLeft, ArrowDownRight, ArrowLeftRight, ArrowUpRight, BadgeCheck,
   BarChart3, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, CreditCard,
@@ -36,7 +36,7 @@ function manilaToday() {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 function manilaMonthStart() { return manilaToday().slice(0, 8) + "01"; }
-function reportWindow(period: "Daily" | "Weekly" | "Monthly") { return getPeriodRange(manilaToday(), period); }
+function reportWindow(period: PeriodKind, anchor = manilaToday(), customStart = manilaMonthStart(), customEnd = manilaToday()) { return period === "Custom" ? { start: customStart, end: customEnd } : getPeriodRange(anchor, period); }
 
 function prettyDate(value: string) {
   if (!value) return "—";
@@ -58,7 +58,10 @@ export default function App() {
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [page, setPage] = useState<Page>("Dashboard");
-  const [reportPeriod, setReportPeriod] = useState<"Daily" | "Weekly" | "Monthly">("Monthly");
+  const [reportPeriod, setReportPeriod] = useState<PeriodKind>("Monthly");
+  const [reportAnchor, setReportAnchor] = useState(manilaToday());
+  const [reportCustomStart, setReportCustomStart] = useState(manilaMonthStart());
+  const [reportCustomEnd, setReportCustomEnd] = useState(manilaToday());
   const [mobileNav, setMobileNav] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -301,53 +304,33 @@ export default function App() {
   const exportExcel = async () => {
     setSaving(true); setError(""); setSuccess("");
     try {
-      const range = getPeriodRange(manilaToday(), reportPeriod);
-      const reportTransactions = transactions.filter((tx) => tx.transaction_date >= range.start && tx.transaction_date <= range.end);
-      const reportTotals = summarizeTransactions(reportTransactions, range);
-      const reportIncome = reportTotals.income;
-      const reportExpenses = reportTotals.expenses;
-      const reportBudgets = budgets.filter((b) => b.period_end >= range.start && b.period_start <= range.end);
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = "Budgetwise"; workbook.created = new Date();
-      const summary = workbook.addWorksheet("Financial Summary");
-      summary.columns = [{ header: "Metric", key: "metric", width: 30 }, { header: "Amount (PHP)", key: "amount", width: 22 }];
-      summary.addRows([
-        { metric: "Report generated (Asia/Manila)", amount: new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" }).format(new Date()) },
-        { metric: "Report frequency", amount: reportPeriod },
-        { metric: "Period", amount: range.start + " to " + range.end },
-        { metric: "Total income", amount: reportIncome / 100 },
-        { metric: "Total expenses", amount: reportExpenses / 100 },
-        { metric: "Savings contributions", amount: reportTotals.savingsContributions / 100 },
-        { metric: "Remaining balance", amount: reportTotals.remainingBalance / 100 },
-        { metric: "Savings across goals", amount: (dashboard?.totals.goalSavings ?? 0) / 100 },
-      ]);
-      const txSheet = workbook.addWorksheet("Transaction Details");
-      txSheet.columns = [{ header: "Date", key: "date", width: 16 }, { header: "Description", key: "description", width: 30 }, { header: "Category", key: "category", width: 22 }, { header: "Account", key: "account", width: 22 }, { header: "Type", key: "type", width: 22 }, { header: "Payment method", key: "payment", width: 20 }, { header: "Amount (PHP)", key: "amount", width: 18 }, { header: "Notes", key: "notes", width: 36 }];
-      txSheet.addRows(reportTransactions.map((tx) => ({ date: tx.transaction_date, description: tx.description || "", category: tx.category_name || "", account: tx.account_name || "", type: tx.transaction_type, payment: tx.payment_method, amount: (tx.transaction_type === "expense" || tx.transaction_type === "savings_contribution" ? -tx.amount_centavos : tx.amount_centavos) / 100, notes: tx.notes || "" })));
-      txSheet.autoFilter = { from: "A1", to: "H1" };
-      const budgetSheet = workbook.addWorksheet("Budget Analysis");
-      budgetSheet.columns = [{ header: "Category", key: "category", width: 24 }, { header: "Period start", key: "start", width: 16 }, { header: "Period end", key: "end", width: 16 }, { header: "Budget (PHP)", key: "budget", width: 18 }, { header: "Spent (PHP)", key: "spent", width: 18 }, { header: "Remaining (PHP)", key: "remaining", width: 20 }];
-      budgetSheet.addRows(reportBudgets.map((b) => ({ category: b.category_name, start: b.period_start, end: b.period_end, budget: b.amount_centavos / 100, spent: b.spent_centavos / 100, remaining: (b.amount_centavos - b.spent_centavos) / 100 })));
-      const goalsSheet = workbook.addWorksheet("Savings Goals");
-      goalsSheet.columns = [{ header: "Goal", key: "goal", width: 28 }, { header: "Target (PHP)", key: "target", width: 18 }, { header: "Saved (PHP)", key: "saved", width: 18 }, { header: "Progress", key: "progress", width: 14 }, { header: "Target date", key: "date", width: 18 }, { header: "Status", key: "status", width: 14 }];
-      goalsSheet.addRows(goals.map((g) => ({ goal: g.name, target: g.target_amount_centavos / 100, saved: g.current_amount_centavos / 100, progress: g.target_amount_centavos ? g.current_amount_centavos / g.target_amount_centavos : 0, date: g.target_date || "", status: g.status })));
-      for (const sheet of [summary, txSheet, budgetSheet, goalsSheet]) {
-        sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-        sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF285A43" } };
-        sheet.views = [{ state: "frozen", ySplit: 1 }];
-        for (let i = 2; i <= sheet.rowCount; i++) sheet.getRow(i).alignment = { vertical: "middle" };
-      }
-      for (const sheet of [summary, txSheet, budgetSheet, goalsSheet]) {
-        sheet.columns.forEach((column) => { if (column.key !== "metric" && column.key !== "date" && column.key !== "start" && column.key !== "end" && column.key !== "description" && column.key !== "category" && column.key !== "account" && column.key !== "type" && column.key !== "goal" && column.key !== "status") column.numFmt = '"₱"#,##0.00;[Red]-"₱"#,##0.00'; });
-      }
-      goalsSheet.getColumn("progress").numFmt = "0%";
+      const range = reportWindow(reportPeriod, reportAnchor, reportCustomStart, reportCustomEnd);
+      if (!range.start || !range.end || range.start > range.end) throw new Error("Choose a valid start and end date for the report.");
+      const workbook = buildFinancialWorkbook({
+        period: reportPeriod,
+        range,
+        transactions,
+        categories,
+        budgets,
+        goals,
+      });
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a"); link.href = objectUrl; link.download = `budgetwise-report-${manilaToday()}.xlsx`; link.click(); URL.revokeObjectURL(objectUrl);
-      flash("Your private financial report was exported.");
-    } catch { setError("Excel export failed. Please try again."); }
-    finally { setSaving(false); }
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = reportPeriod === "Custom"
+        ? `Financial_Report_Custom_${range.start}_to_${range.end}.xlsx`
+        : `Financial_Report_${reportPeriod}_${range.start}.xlsx`;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      flash("Excel workbook downloaded for " + range.start + " to " + range.end + ".");
+    } catch (e) {
+      setError(e instanceof Error ? "Excel export failed: " + e.message : "Excel export failed. Please try again.");
+    } finally { setSaving(false); }
   };
 
   if (loading && !user) return <div className="full-state"><LoaderCircle className="spin" size={28} /><span>Checking your secure session…</span></div>;
@@ -513,7 +496,44 @@ export default function App() {
                 })}</div> : <EmptyState icon={Goal} title="Your goals start here" description="Create a goal for an emergency fund, a trip, or another future plan." />}
               </div></section>
             </div>}
-            {page === "Reports" && <section className="panel report-panel"><div className="report-hero"><div className="report-icon"><FileSpreadsheet size={25} /></div><div className="report-hero-copy"><span className="overline">YOUR DATA, YOUR REPORT</span><h2>Financial report in Excel</h2><p>Export your saved records into a workbook you can review, filter, or keep for your personal records.</p></div><button className="btn btn-primary" onClick={exportExcel} disabled={saving}><Download size={17} /> Export .xlsx</button></div><div className="report-period-select"><div><b>Report frequency</b><small>Daily and weekly periods use Asia/Manila dates.</small></div><div className="segmented report-segmented">{(["Daily", "Weekly", "Monthly"] as const).map((period) => <button type="button" key={period} className={reportPeriod === period ? "selected income-selected" : ""} onClick={() => setReportPeriod(period)}>{period}</button>)}</div><span className="report-range">{reportWindow(reportPeriod).start} – {reportWindow(reportPeriod).end}</span></div><div className="report-sheet-grid"><div><FileSpreadsheet size={20} /><b>Financial Summary</b><span>Current month income, expenses, savings and remaining balance.</span></div><div><ArrowLeftRight size={20} /><b>Transaction Details</b><span>Your saved transactions, categories, accounts and dates.</span></div><div><CreditCard size={20} /><b>Budget Analysis</b><span>Budget limits, actual spending and remaining amounts.</span></div><div><Goal size={20} /><b>Savings Goals</b><span>Targets, saved amounts, progress and goal status.</span></div></div><div className="report-note"><ShieldCheck size={17} /><span>Reports are generated from your signed-in account's saved records. No sample transactions are included.</span></div></section>}
+            {page === "Reports" && <section className="panel report-panel">
+              <div className="report-hero">
+                <div className="report-icon"><FileSpreadsheet size={25} /></div>
+                <div className="report-hero-copy">
+                  <span className="overline">YOUR DATA, YOUR REPORT</span>
+                  <h2>Financial report in Excel</h2>
+                  <p>Download a formatted .xlsx workbook with your financial summary, period transactions, budget analysis, and savings goal progress.</p>
+                </div>
+                <button className="btn btn-primary" onClick={exportExcel} disabled={saving}>
+                  {saving ? <LoaderCircle className="spin" size={17} /> : <Download size={17} />}
+                  {saving ? "Preparing workbook…" : "Download Excel"}
+                </button>
+              </div>
+              <div className="report-period-select">
+                <div><b>Reporting period</b><small>Dates are interpreted using Asia/Manila. Transfers are listed but excluded from income and spending totals.</small></div>
+                <div className="segmented report-segmented report-period-buttons">
+                  {(["Daily", "Weekly", "Monthly", "Custom"] as const).map((period) => <button type="button" key={period} className={reportPeriod === period ? "selected income-selected" : ""} onClick={() => setReportPeriod(period)}>{period === "Custom" ? "Custom range" : period}</button>)}
+                </div>
+                {reportPeriod === "Custom"
+                  ? <div className="period-date-controls report-date-controls">
+                      <label>From<input type="date" value={reportCustomStart} max={reportCustomEnd || undefined} onChange={(e) => setReportCustomStart(e.target.value)} required /></label>
+                      <label>To<input type="date" value={reportCustomEnd} min={reportCustomStart || undefined} onChange={(e) => setReportCustomEnd(e.target.value)} required /></label>
+                    </div>
+                  : <div className="period-date-controls report-date-controls">
+                      <button type="button" className="btn btn-secondary btn-small" onClick={() => setReportAnchor(shiftPeriod(reportAnchor, reportPeriod, -1))}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }} /> Previous</button>
+                      <label>Anchor date<input type="date" value={reportAnchor} onChange={(e) => setReportAnchor(e.target.value)} /></label>
+                      <button type="button" className="btn btn-secondary btn-small" onClick={() => setReportAnchor(shiftPeriod(reportAnchor, reportPeriod, 1))}>Next <ChevronRight size={14} /></button>
+                    </div>}
+                <span className="report-range">{reportWindow(reportPeriod, reportAnchor, reportCustomStart, reportCustomEnd).start} – {reportWindow(reportPeriod, reportAnchor, reportCustomStart, reportCustomEnd).end}</span>
+              </div>
+              <div className="report-sheet-grid">
+                <div><FileSpreadsheet size={20} /><b>Financial Summary</b><span>Income, expenses, savings contributions, remaining balance, Needs, Wants, goal progress, and category percentages.</span></div>
+                <div><ArrowLeftRight size={20} /><b>Transactions</b><span>Selected-period transaction details, payment method, notes, and category group with filters.</span></div>
+                <div><CreditCard size={20} /><b>Budget Analysis</b><span>Budget limits, actual spending, remaining budget, percentage used, and status.</span></div>
+                <div><Goal size={20} /><b>Savings Goals</b><span>Targets, current saved amounts, remaining amounts, target dates, and progress.</span></div>
+              </div>
+              <div className="report-note"><ShieldCheck size={17} /><span>Generated from your signed-in account’s saved records only. Amounts use Philippine pesos; category totals exclude transfers and clearly identify uncategorized activity.</span></div>
+            </section>}
             {page === "Settings" && <div className="settings-grid"><section className="panel form-panel"><PanelTitle eyebrow="MONEY SOURCES" title="Accounts" description="Add cash, bank, e-wallet, or credit accounts." /><form className="stack-form" onSubmit={createAccount}><label>Account name<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="e.g. Main bank account" maxLength={60} required /></label><label>Account type<select value={accountForm.accountType} onChange={(e) => setAccountForm({ ...accountForm, accountType: e.target.value })}><option value="cash">Cash</option><option value="bank">Bank account</option><option value="e-wallet">E-wallet</option><option value="credit">Credit account</option></select></label><label>Opening balance (₱)<input type="number" min="0" max="1000000000" step="0.01" value={accountForm.openingBalance} onChange={(e) => setAccountForm({ ...accountForm, openingBalance: e.target.value })} required /></label><button className="btn btn-primary btn-full" type="submit" disabled={saving}><Plus size={17} /> Add account</button></form><div className="settings-records">{accounts.length ? accounts.map((a) => <div className="setting-row" key={a.id}><span className="setting-record-icon"><Wallet size={17} /></span><div><b>{a.name}</b><small>{a.account_type}</small></div><strong>{money(a.balance_centavos ?? a.opening_balance_centavos)}</strong></div>) : <EmptyState icon={Wallet} title="No accounts yet" description="Add an account to start saving transactions." />}</div></section><section className="panel form-panel" id="category-entry"><PanelTitle eyebrow="ORGANIZE YOUR MONEY" title="Categories" description="Manage Needs, Wants, Savings, and income categories." /><form className="stack-form" onSubmit={createCategory}><label>Category name<input value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} placeholder="e.g. Groceries" maxLength={60} required /></label><label>Category type<select value={categoryForm.kind} onChange={(e) => setCategoryForm({ ...categoryForm, kind: e.target.value, budgetGroup: e.target.value === "income" ? "income" : "needs" })}><option value="expense">Expense / allocation</option><option value="income">Income</option></select></label>{categoryForm.kind === "expense" && <label>Budget group<select value={categoryForm.budgetGroup} onChange={(e) => setCategoryForm({ ...categoryForm, budgetGroup: e.target.value })}><option value="needs">Needs — necessities</option><option value="wants">Wants — discretionary</option><option value="savings">Savings — savings categories</option></select></label>}<button className="btn btn-primary btn-full" type="submit" disabled={saving}>{editingCategoryId ? <Check size={17} /> : <Plus size={17} />}{editingCategoryId ? "Update category" : "Add category"}</button>{editingCategoryId && <button className="btn btn-secondary btn-full" type="button" onClick={() => { setEditingCategoryId(null); setCategoryForm({ name: "", kind: "expense", budgetGroup: "needs" }); }}>Cancel edit</button>}</form><div className="category-list category-manage-list">{categories.length ? categories.map((cat) => <article className="category-manage-row" key={cat.id}><span className={"category-dot " + cat.kind} /><div className="category-manage-label"><b>{cat.name}</b><small>{cat.kind === "income" ? "Income" : cat.budget_group[0].toUpperCase() + cat.budget_group.slice(1)}</small></div><button className="icon-btn" type="button" onClick={() => editCategory(cat)} aria-label={"Edit " + cat.name}><Settings size={14} /></button><button className="icon-btn delete-btn" type="button" onClick={() => deleteCategory(cat)} aria-label={"Delete " + cat.name}><Trash2 size={14} /></button></article>) : <EmptyState icon={Ellipsis} title="No categories yet" description="Add categories to organize transactions." />}</div></section><section className="panel preferences-panel"><PanelTitle eyebrow="PREFERENCES" title="Regional settings" description="These settings are used throughout your finance tracker." /><div className="preference-row"><span className="preference-icon"><Wallet size={18} /></span><div><b>Currency</b><small>Philippine peso</small></div><strong>PHP (₱)</strong></div><div className="preference-row"><span className="preference-icon"><Clock3 size={18} /></span><div><b>Time zone</b><small>Dates and reporting period</small></div><strong>Asia/Manila</strong></div><div className="preference-row"><span className="preference-icon"><ShieldCheck size={18} /></span><div><b>Data privacy</b><small>Only your authenticated account can access these records.</small></div><strong className="private-label">Private</strong></div><button className="btn btn-secondary signout-btn" onClick={signOut} disabled={saving}><LogOut size={17} /> Sign out</button></section></div>}
           </>}
           {viewTransaction && <div className="modal-backdrop" role="presentation" onClick={() => setViewTransaction(null)}>
