@@ -251,7 +251,7 @@ export default function App() {
         { metric: "Total income", amount: reportIncome / 100 },
         { metric: "Total expenses", amount: reportExpenses / 100 },
         { metric: "Net cash flow", amount: (reportIncome - reportExpenses) / 100 },
-        { metric: "Savings across active goals", amount: (dashboard?.totals.goalSavings ?? 0) / 100 },
+        { metric: "Savings across goals", amount: (dashboard?.totals.goalSavings ?? 0) / 100 },
         { metric: "Remaining account balance", amount: (dashboard?.totals.remainingBalance ?? 0) / 100 },
       ]);
       const txSheet = workbook.addWorksheet("Transaction Details");
@@ -275,7 +275,7 @@ export default function App() {
       }
       goalsSheet.getColumn("progress").numFmt = "0%";
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const blob = new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a"); link.href = objectUrl; link.download = `budgetwise-report-${manilaToday()}.xlsx`; link.click(); URL.revokeObjectURL(objectUrl);
       flash("Your private financial report was exported.");
@@ -394,7 +394,7 @@ function DashboardPage({ dashboard, accounts, goals, transactions, setPage }: { 
     <section className="summary-grid">
       <MetricCard title="Total Income" value={money(totals?.income ?? 0)} icon={ArrowDownLeft} tone="green" caption="This month" />
       <MetricCard title="Total Expenses" value={money(totals?.expenses ?? 0)} icon={ArrowUpRight} tone="orange" caption="This month" />
-      <MetricCard title="Savings" value={money(totals?.goalSavings ?? 0)} icon={Goal} tone="violet" caption="Across active goals" />
+      <MetricCard title="Savings" value={money(totals?.goalSavings ?? 0)} icon={Goal} tone="violet" caption="Across your goals" />
       <MetricCard title="Remaining Balance" value={money(totals?.remainingBalance ?? 0)} icon={Wallet} tone="blue" caption="Across your accounts" />
     </section>
     <div className="dashboard-grid"><section className="panel overview-panel"><div className="section-head"><div><span className="overline">MONTHLY OVERVIEW</span><h2>Income & expenses</h2><p>{dashboard?.period.start ? prettyDate(dashboard.period.start) + " – " + prettyDate(dashboard.period.end) : "Current month"} · Asia/Manila</p></div><span className="month-chip"><CalendarDays size={14} /> This month</span></div>
