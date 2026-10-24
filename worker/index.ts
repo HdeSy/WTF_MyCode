@@ -297,7 +297,10 @@ export default {
         const description = typeof body?.description === "string" ? body.description.trim() : "";
         const paymentMethod = body?.paymentMethod;
         const notes = typeof body?.notes === "string" ? body.notes.trim() : "";
+        const goalId = typeof body?.goalId === "string" && body.goalId ? body.goalId : null;
         if (kind !== "income" && kind !== "expense" && kind !== "savings_contribution") return fail("Choose income, expense, or savings contribution.");
+        if (kind !== "savings_contribution" && goalId) return fail("Only savings contributions can be linked to a goal.");
+        if (goalId && !await db.prepare("SELECT id FROM savings_goals WHERE id=? AND user_id=?").bind(goalId,userId).first()) return fail("Choose one of your own savings goals.",403);
         if (cents === null) return fail("Enter an amount greater than ₱0.00 and no more than ₱1,000,000,000.00.");
         if (!validDate(date)) return fail("Choose a valid transaction date.");
         if (date > todayInManila()) return fail("Transaction date cannot be in the future (Asia/Manila).");
@@ -347,7 +350,7 @@ export default {
         return json({ data: { id: budgetId, category_id: categoryId, period_start: start, period_end: end, amount_centavos: cents } }, 201);
       }
 
-      const budgetMatch = url.pathname.match(/^\\/api\\/budgets\\/([a-f0-9-]+)$/i);
+      const budgetMatch = url.pathname.match(/^\/api\/budgets\/([a-f0-9-]+)$/i);
       if (budgetMatch && request.method === "PUT") {
         const body = await readJson(request);
         const categoryId = typeof body?.categoryId === "string" ? body.categoryId : "";
@@ -355,7 +358,7 @@ export default {
         const start = body?.periodStart, end = body?.periodEnd;
         if (cents === null) return fail("Enter a budget amount greater than ₱0.00.");
         if (!validDate(start) || !validDate(end) || start > end) return fail("Choose a valid budget period.");
-        const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=?").bind(categoryId,userId,"expense").first();
+        const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=? AND budget_group IN (?,?)").bind(categoryId,userId,"expense","needs","wants").first();
         if (!category) return fail("Choose one of your own expense categories.",403);
         try {
           const result = await db.prepare("UPDATE budgets SET category_id=?,period_start=?,period_end=?,amount_centavos=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?").bind(categoryId,start,end,cents,budgetMatch[1],userId).run();
