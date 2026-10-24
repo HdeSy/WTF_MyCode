@@ -175,7 +175,7 @@ export default {
         const opening = body?.openingBalance === undefined || body?.openingBalance === "" ? 0 :
           (typeof body.openingBalance === "number" && Number.isFinite(body.openingBalance) && body.openingBalance >= 0 && body.openingBalance <= 1000000000 ? Math.round(body.openingBalance * 100) : null);
         if (!name || name.length > 60) return fail("Enter an account name of 1–60 characters.");
-        if (!["cash", "bank", "e-wallet", "credit"].includes(String(type))) return fail("Choose a valid account type.");
+        if (type !== "cash" && type !== "bank" && type !== "e-wallet" && type !== "credit") return fail("Choose a valid account type.");
         if (opening === null) return fail("Opening balance must be a non-negative amount of up to ₱1,000,000,000.");
         const accountId = id();
         await db.prepare("INSERT INTO accounts (id,user_id,name,account_type,opening_balance_centavos) VALUES (?,?,?,?,?)").bind(accountId,userId,name,type,opening).run();
@@ -228,7 +228,7 @@ export default {
         const cents = amountCentavos(body?.amount);
         const date = body?.date;
         const description = typeof body?.description === "string" ? body.description.trim() : "";
-        if (!["income", "expense"].includes(String(kind))) return fail("Choose income or expense.");
+        if (kind !== "income" && kind !== "expense") return fail("Choose income or expense.");
         if (cents === null) return fail("Enter an amount greater than ₱0.00 and no more than ₱1,000,000,000.00.");
         if (!validDate(date)) return fail("Choose a valid transaction date.");
         if (date > todayInManila()) return fail("Transaction date cannot be in the future (Asia/Manila).");
