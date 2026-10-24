@@ -304,7 +304,7 @@ export default {
         const cents = typeof saved === "number" && Number.isFinite(saved) && saved >= 0 && saved <= 1000000000 ? Math.round(saved * 100) : null;
         const status = body?.status;
         if (cents === null) return fail("Saved amount must be from ₱0.00 to ₱1,000,000,000.00.");
-        if (status !== undefined && !["active", "paused", "completed"].includes(String(status))) return fail("Choose a valid goal status.");
+        if (status !== undefined && status !== "active" && status !== "paused" && status !== "completed") return fail("Choose a valid goal status.");
         const existing = await db.prepare("SELECT id FROM savings_goals WHERE id=? AND user_id=?").bind(goalMatch[1],userId).first();
         if (!existing) return fail("Savings goal not found.", 404);
         if (status) {
