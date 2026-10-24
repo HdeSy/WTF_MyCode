@@ -351,7 +351,7 @@ export default {
         const start = body?.periodStart, end = body?.periodEnd;
         if (cents === null) return fail("Enter a budget amount greater than ₱0.00.");
         if (!validDate(start) || !validDate(end) || start > end) return fail("Choose a valid period; the end date must not be before the start date.");
-        const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind='expense'").bind(categoryId,userId).first();
+        const category = await db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND kind=? AND budget_group IN (?,?)").bind(categoryId,userId,"expense","needs","wants").first();
         if (!category) return fail("Choose one of your own expense categories.", 403);
         const budgetId = id();
         try {
