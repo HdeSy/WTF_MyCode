@@ -1,0 +1,4 @@
+# Local development only. Copy to .dev.vars and replace values on your machine.
+# Do not commit .dev.vars or real secrets.
+BETTER_AUTH_SECRET="replace-with-a-random-secret-at-least-32-characters"
+BETTER_AUTH_URL="http://localhost:5173"
