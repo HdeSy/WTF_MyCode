@@ -18,7 +18,6 @@ type Category = { id: string; name: string; kind: "income" | "expense"; budget_g
 type Transaction = { id: string; account_id: string; category_id: string | null; goal_id?: string | null; transaction_type: "income" | "expense" | "savings_contribution" | "transfer"; amount_centavos: number; transaction_date: string; description: string; payment_method: "cash" | "bank_transfer" | "e_wallet" | "credit_card" | "other"; notes: string | null; account_name?: string; category_name?: string | null };
 type Budget = { id: string; category_id: string; category_name: string; period_start: string; period_end: string; amount_centavos: number; spent_centavos: number };
 type Goal = { id: string; name: string; description?: string | null; target_amount_centavos: number; target_date: string | null; current_amount_centavos: number; status: "active" | "completed" | "paused" };
-type Dashboard = { period: { start: string; end: string; timezone: string }; totals: { income: number; expenses: number; savings: number; savingsContributions: number; remainingBalance: number; goalSavings: number }; recentTransactions: Transaction[] };
 type ApiResult<T> = { data: T; error?: string };
 
 const navItems: { label: Page; icon: typeof LayoutDashboard; description: string }[] = [
@@ -67,7 +66,6 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -100,15 +98,13 @@ export default function App() {
     try {
       const me = await api<{ user: User }>("/api/me");
       setUser(me.user);
-      const [dash, tx, acc, cats, buds, savings] = await Promise.all([
-        api<Dashboard>("/api/dashboard"),
+      const [tx, acc, cats, buds, savings] = await Promise.all([
         api<ApiResult<Transaction[]>>("/api/transactions"),
         api<ApiResult<Account[]>>("/api/accounts"),
         api<ApiResult<Category[]>>("/api/categories"),
         api<ApiResult<Budget[]>>("/api/budgets"),
         api<ApiResult<Goal[]>>("/api/savings-goals"),
       ]);
-      setDashboard(dash);
       setTransactions(tx.data);
       setAccounts(acc.data);
       setCategories(cats.data);
