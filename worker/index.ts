@@ -141,7 +141,7 @@ export default {
             COALESCE(SUM(CASE WHEN transaction_type='savings_contribution' THEN amount_centavos ELSE 0 END),0) AS savings_contributions
           FROM transactions WHERE user_id=? AND transaction_date BETWEEN ? AND ?
         `).bind(userId, start, today).first<{ income: number; expenses: number; savings_contributions: number }>();
-        const goals = await db.prepare("SELECT COALESCE(SUM(current_amount_centavos),0) AS saved FROM savings_goals WHERE user_id=? AND status != 'paused'").bind(userId).first<{ saved: number }>();
+        const goals = await db.prepare("SELECT COALESCE(SUM(g.current_amount_centavos + COALESCE((SELECT SUM(t.amount_centavos) FROM transactions t WHERE t.goal_id=g.id AND t.user_id=g.user_id AND t.transaction_type='savings_contribution'),0)),0) AS saved FROM savings_goals g WHERE g.user_id=? AND g.status != 'paused'").bind(userId).first<{ saved: number }>();
         const recent = await db.prepare(`
           SELECT t.id,t.account_id,t.category_id,t.goal_id,t.transaction_type,t.amount_centavos,t.transaction_date,t.description,t.payment_method,t.notes,
                  a.name AS account_name,c.name AS category_name
