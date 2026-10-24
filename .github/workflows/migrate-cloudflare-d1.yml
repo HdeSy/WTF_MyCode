@@ -1,0 +1,83 @@
+name: Apply Budgetwise D1 Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      database_id:
+        description: "Paste the full D1 database ID from Cloudflare to confirm the target"
+        required: true
+        type: string
+      confirm_empty_database:
+        description: "Confirm budgetwise-db is a new, empty database with no important data"
+        required: true
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
+      apply_migrations:
+        description: "Explicitly authorize applying pending migrations to the confirmed database"
+        required: true
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: budgetwise-d1-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_empty_database == 'yes' && inputs.apply_migrations == 'yes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CONFIRMED_DATABASE_ID: ${{ inputs.database_id }}
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify credentials and exact D1 target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "::error::Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID repository secret."
+            exit 1
+          fi
+          CONFIGURED_ID="$(node -e "const fs=require('fs'); const s=fs.readFileSync('wrangler.jsonc','utf8'); const m=s.match(/\\"database_id\\"\\s*:\\s*\\"([^\\"]+)\\"/); if(!m) process.exit(2); process.stdout.write(m[1]);")"
+          if [[ "$CONFIRMED_DATABASE_ID" != "$CONFIGURED_ID" ]]; then
+            echo "::error::The entered database ID does not match wrangler.jsonc. No migrations were applied."
+            exit 1
+          fi
+          echo "Database ID confirmation passed."
+
+      - name: Run tests and validate deployment configuration
+        run: |
+          npm test
+          npm run typecheck
+          npm run validate:deploy
+
+      - name: Show current remote migration history
+        run: npx wrangler d1 migrations list budgetwise-db --remote
+
+      - name: Apply pending migrations to the confirmed empty database
+        run: npx wrangler d1 migrations apply budgetwise-db --remote
+
+      - name: Verify migration history after applying
+        run: npx wrangler d1 migrations list budgetwise-db --remote
