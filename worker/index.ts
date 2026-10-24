@@ -166,7 +166,7 @@ export default {
       if (url.pathname === "/api/accounts" && request.method === "GET") {
         const rows = await db.prepare(`
           SELECT a.id,a.name,a.account_type,a.opening_balance_centavos,
-            a.opening_balance_centavos + COALESCE(SUM(CASE WHEN t.transaction_type='income' THEN t.amount_centavos WHEN t.transaction_type='expense' THEN -t.amount_centavos ELSE 0 END),0) AS balance_centavos
+            a.opening_balance_centavos + COALESCE(SUM(CASE WHEN t.transaction_type='income' THEN t.amount_centavos WHEN t.transaction_type IN ('expense','savings_contribution') THEN -t.amount_centavos ELSE 0 END),0) AS balance_centavos
           FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id AND t.user_id=a.user_id
           WHERE a.user_id=? GROUP BY a.id ORDER BY a.created_at
         `).bind(userId).all();
