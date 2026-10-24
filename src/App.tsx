@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { getPeriodRange, shiftPeriod, summarizeTransactions } from "./lib/finance";
+import { calculateUnallocatedIncome, getPeriodRange, percentageOfIncome, shiftPeriod, summarizeTransactions } from "./lib/finance";
 import type { PeriodKind } from "./lib/finance";
 import ExcelJS from "exceljs";
 import {
@@ -585,7 +585,7 @@ function DashboardPage({ accounts, categories, goals, transactions, setPage }: {
   const pieIncome = weekTotals.income;
   let cursor = 0;
   const pieStops = pieData.map((item) => { const start = cursor; cursor += pieIncome >= pieTotal && pieIncome > 0 ? item.amount / pieIncome * 100 : pieTotal > 0 ? item.amount / pieTotal * 100 : 0; return item.color + " " + start + "% " + cursor + "%"; }).join(", ");
-  const unallocated = pieIncome - pieTotal;
+  const unallocated = calculateUnallocatedIncome(pieIncome, pieData.map((item) => item.amount));
   const expenseCategories = weekTransactions.filter((tx) => tx.transaction_type === "expense").reduce<Record<string, number>>((acc, tx) => { const key = tx.category_name || "Uncategorized"; acc[key] = (acc[key] || 0) + tx.amount_centavos; return acc; }, {});
   const topCategories = Object.entries(expenseCategories).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const topExpenseTotal = Object.values(expenseCategories).reduce((sum,amount) => sum + amount,0);
@@ -615,8 +615,8 @@ function DashboardPage({ accounts, categories, goals, transactions, setPage }: {
       <p className="active-range-label">{prettyDate(weekRange.start)} – {prettyDate(weekRange.end)} · Monday–Sunday · Asia/Manila</p>
       {pieIncome <= 0 ? <EmptyState icon={BarChart3} title="No income for this week" description="The weekly allocation chart appears when the selected week has income. There is no division by zero." /> : <div className="weekly-chart-layout">
         <div className="allocation-pie-wrap"><button className="allocation-pie" type="button" aria-label={"Weekly allocation pie chart. Selected slice: " + pieData[selectedPieSlice].name} style={{background: pieTotal > 0 ? "conic-gradient(" + pieStops + ")" : "conic-gradient(#edf2ec 0 100%)"}} onClick={() => setSelectedPieSlice((selectedPieSlice+1)%pieData.length)}><span><small>Weekly income</small><b>{money(pieIncome)}</b><small>{pieTotal > pieIncome ? "Allocation exceeds income" : "Select a slice"}</small></span></button><p className="chart-interaction-hint">Select the chart or a legend item to inspect each category.</p></div>
-        <div className="allocation-legend">{pieData.map((item,index) => { const pct = pieIncome > 0 ? item.amount / pieIncome * 100 : 0; return <button type="button" key={item.name} className={"allocation-legend-item " + (selectedPieSlice === index ? "active" : "")} onClick={() => setSelectedPieSlice(index)}><span className="allocation-legend-dot" style={{background:item.color}} /><span className="allocation-legend-copy"><b>{item.name}</b><small>{money(item.amount)} · {pct.toFixed(1)}% of income</small></span><strong>{pct.toFixed(1)}%</strong></button>; })}</div>
-        <div className="allocation-summary"><span>Selected category</span><b>{pieData[selectedPieSlice].name}</b><strong>{money(pieData[selectedPieSlice].amount)}</strong><small>{(pieIncome > 0 ? pieData[selectedPieSlice].amount / pieIncome * 100 : 0).toFixed(1)}% of weekly income</small></div>
+        <div className="allocation-legend">{pieData.map((item,index) => { const pct = percentageOfIncome(item.amount, pieIncome); return <button type="button" key={item.name} className={"allocation-legend-item " + (selectedPieSlice === index ? "active" : "")} onClick={() => setSelectedPieSlice(index)}><span className="allocation-legend-dot" style={{background:item.color}} /><span className="allocation-legend-copy"><b>{item.name}</b><small>{money(item.amount)} · {pct.toFixed(1)}% of income</small></span><strong>{pct.toFixed(1)}%</strong></button>; })}</div>
+        <div className="allocation-summary"><span>Selected category</span><b>{pieData[selectedPieSlice].name}</b><strong>{money(pieData[selectedPieSlice].amount)}</strong><small>{percentageOfIncome(pieData[selectedPieSlice].amount, pieIncome).toFixed(1)}% of weekly income</small></div>
       </div>}
       {pieIncome > 0 && <div className={"unallocated-summary " + (unallocated < 0 ? "negative" : "")}><div><b>{unallocated < 0 ? "Allocation above income" : "Unallocated income"}</b><small>{unallocated < 0 ? "Needs, wants, and savings are greater than income for this week." : "Income not represented by the three chart categories; it is not assigned to another slice."}</small></div><strong>{money(Math.abs(unallocated))}{unallocated < 0 ? " over" : ""}</strong></div>}
     </section>
