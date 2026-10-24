@@ -48,3 +48,15 @@ export function summarizeTransactions<T extends FinancialTransaction>(transactio
   }
   return { income, expenses, savingsContributions, remainingBalance: income - expenses - savingsContributions };
 }
+
+/** Percentages for the allocation chart are always measured against total income, never against the sum of slices. */
+export function percentageOfIncome(amountCentavos: number, incomeCentavos: number): number {
+  if (!Number.isFinite(amountCentavos) || !Number.isFinite(incomeCentavos) || incomeCentavos <= 0) return 0;
+  return amountCentavos / incomeCentavos * 100;
+}
+
+/** A negative result means the three allocations exceed income. Keep it visible instead of hiding it in a slice. */
+export function unallocatedIncome(incomeCentavos: number, allocationsCentavos: number[]): number {
+  const allocated = allocationsCentavos.reduce((sum, amount) => sum + (Number.isFinite(amount) ? amount : 0), 0);
+  return incomeCentavos - allocated;
+}
