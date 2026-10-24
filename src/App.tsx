@@ -181,6 +181,18 @@ export default function App() {
     document.getElementById("transaction-entry")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const deleteTransaction = async (transactionId: string) => {
+    if (!window.confirm("Delete this transaction? This cannot be undone.")) return;
+    setSaving(true); setError(""); setSuccess("");
+    try {
+      await api("/api/transactions/" + transactionId, { method: "DELETE" });
+      if (editingTransactionId === transactionId) setEditingTransactionId(null);
+      await refreshAll();
+      flash("Transaction deleted.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not delete transaction."); }
+    finally { setSaving(false); }
+  };
+
   const submitBudget = async (event: FormEvent) => {
     event.preventDefault(); setError(""); setSuccess("");
     const amount = Number(budgetForm.amount);
