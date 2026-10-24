@@ -7,7 +7,7 @@ This branch contains the initial UI and Cloudflare Worker scaffold. The app is *
 - React + TypeScript + Vite
 - Cloudflare Workers and Static Assets
 - Cloudflare D1 (SQLite)
-- Better Auth for email/password sessions
+- Better Auth for email/password sessions with the Drizzle D1 adapter
 - ExcelJS for xlsx report generation
 
 ## Local development
@@ -40,8 +40,8 @@ Review each command and its target before running it. Do not apply migrations to
 
 ## Reporting
 
-The prototype's Excel export currently exports **sample values only**. The real export must be connected to authenticated, user-scoped database queries before this feature is used with personal data.
+Excel reports are generated from the signed-in user’s saved transactions, budgets, and savings goals. Daily, weekly, and monthly reports use Asia/Manila calendar dates. Empty accounts produce empty reports rather than fabricated sample data.
 
 ## Deployment status
 
-No D1 database has been created or connected, no secret has been set, and no Cloudflare deployment has been performed from this branch.
+No D1 database has been created or connected, no secret has been set, and no Cloudflare deployment has been performed from this branch. A `.dev.vars.example` file documents the local environment variables; copy it to `.dev.vars` locally and never commit the real `.dev.vars` file.
