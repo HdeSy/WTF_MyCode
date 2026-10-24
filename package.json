@@ -15,7 +15,8 @@
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "recharts": "^2.15.0"
+    "recharts": "^2.15.0",
+    "better-auth": "^1.5.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.0.0",
